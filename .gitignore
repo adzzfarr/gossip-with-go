@@ -1,0 +1,14 @@
+# Go Build
+/backend/bin
+/backend/vendor
+
+# Go Cache
+*.exe
+*.dll
+
+# Node Modules
+/frontend/node_modules
+/frontend/dist
+
+# Environment Variables
+.env
