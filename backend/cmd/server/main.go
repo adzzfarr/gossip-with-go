@@ -25,8 +25,14 @@ func main() {
 	// Initialise Layers (Dependency Injection)
 	// Flow: main -> Repository -> Service -> Handler
 	repo := data.NewRepository(dbPool)
+
+	// Topics
 	topicService := service.NewTopicService(repo)
 	topicHandler := api.NewTopicHandler(topicService)
+
+	// Users
+	userService := service.NewUserService(repo)
+	userHandler := api.NewUserHandler(userService)
 
 	// Initialise Gin router
 	router := gin.Default()
@@ -41,6 +47,9 @@ func main() {
 	{
 		// Topic Routes
 		v1.GET("/topics", topicHandler.GetAllTopics)
+
+		// User Routes
+		v1.POST("/users", userHandler.RegisterUser)
 	}
 
 	// Run Server

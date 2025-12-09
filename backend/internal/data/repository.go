@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -56,4 +57,57 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 	}
 
 	return topics, nil
+}
+
+// FindUserByUsername fetches user by their unique username
+// Used to check if a user exists (during registration) and to retrieve credentials (during login).
+func (repo *Repository) FindUserByUsername(username string) (*User, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var user User
+	query := `
+        SELECT user_id, username, password_hash, created_at
+        FROM users
+        WHERE username = $1`
+
+	err := repo.DB.QueryRow(ctx, query, username).Scan(
+		&user.UserID,
+		&user.Username,
+		&user.PasswordHash,
+		&user.CreatedAt,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("query to find user failed: %w", err)
+	}
+
+	// Return pointer to the found User
+	return &user, nil
+}
+
+// CreateUser inserts a new user record into the database
+// NOTE: The password MUST already be hashed before this function is called (handled by service layer)
+func (repo *Repository) CreateUser(user *User) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+        INSERT INTO users (username, password_hash)
+        VALUES ($1, $2)
+        RETURNING user_id, created_at`
+
+	err := repo.DB.QueryRow(ctx, query, user.Username, user.PasswordHash).Scan(
+		&user.UserID,
+		&user.CreatedAt,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+
+	return nil
 }

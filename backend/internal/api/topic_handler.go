@@ -13,8 +13,8 @@ type TopicHandler struct {
 }
 
 // NewTopicHandler creates a new instance of TopicHandler
-func NewTopicHandler(s *service.TopicService) *TopicHandler {
-	return &TopicHandler{Service: s}
+func NewTopicHandler(service *service.TopicService) *TopicHandler {
+	return &TopicHandler{Service: service}
 }
 
 // GetAllTopics handles GET requests for topics

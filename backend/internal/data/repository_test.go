@@ -1,17 +1,4 @@
-/*
-1. Run `docker compose up -d db` from project root to start PostgreSQL container (if not already running)
-2. Run `go test -v ./internal/data/ -run TestGetAllTopicsIntegration` from backend/internal/data/
-
-Expected Output:
-=== RUN   TestGetAllTopicsIntegration
---- PASS: TestGetAllTopicsIntegration
-
-	repository_test.go:27: Inserted test user with ID: (some number)
-	repository_test.go:49: Repository function successfully executed and data verified.
-
-PASS
-ok      github.com/adzzfarr/gossip-with-go/backend/internal/data
-*/
+// Run `go test -v ./...` in /backend
 
 package data
 
