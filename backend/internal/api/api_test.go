@@ -33,12 +33,16 @@ func setupRouter(test *testing.T) (*gin.Engine, *data.Repository) {
 	userService := service.NewUserService(repo)
 	userHandler := NewUserHandler(userService)
 
+	postService := service.NewPostService(repo)
+	postHandler := NewPostHandler(postService)
+
 	// Set up router
 	router := gin.Default()
 	v1 := router.Group("/api/v1")
 	{
 		v1.GET("/topics", topicHandler.GetAllTopics)
 		v1.POST("/users", userHandler.RegisterUser)
+		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
 	}
 
 	return router, repo
@@ -48,17 +52,43 @@ func clearTestData(test *testing.T, repo *data.Repository, usernames []string, t
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Delete Topics
-	for _, id := range topicIDs {
-		_, err := repo.DB.Exec(ctx, "DELETE FROM topics WHERE topic_id = $1", id)
+	// Delete Posts
+	for _, topicID := range topicIDs {
+		_, err := repo.DB.Exec(
+			ctx,
+			`DELETE FROM posts
+			WHERE topic_id = $1`,
+			topicID,
+		)
+
 		if err != nil {
-			test.Logf("Warning: Failed to delete test topic ID %d during teardown: %v", id, err)
+			test.Logf("Warning: Failed to delete posts for test topic ID %d during teardown: %v", topicID, err)
+		}
+	}
+
+	// Delete Topics
+	for _, topicID := range topicIDs {
+		_, err := repo.DB.Exec(
+			ctx,
+			`DELETE FROM topics 
+			WHERE topic_id = $1`,
+			topicID,
+		)
+
+		if err != nil {
+			test.Logf("Warning: Failed to delete test topic ID %d during teardown: %v", topicID, err)
 		}
 	}
 
 	// Delete Users
 	for _, username := range usernames {
-		_, err := repo.DB.Exec(ctx, "DELETE FROM users WHERE username = $1", username)
+		_, err := repo.DB.Exec(
+			ctx,
+			`DELETE FROM users 
+			WHERE username = $1`,
+			username,
+		)
+
 		if err != nil {
 			test.Logf("Warning: Failed to delete test user %s during teardown: %v", username, err)
 		}
@@ -157,30 +187,55 @@ func TestGetAllTopics(test *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Insert User
+	// Create User
 	var userID int
-	err := repo.DB.QueryRow(ctx, "INSERT INTO users (username, password_hash) VALUES ($1, $2) RETURNING user_id", testUsername, "fakehash").Scan(&userID)
+	err := repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash) 
+		VALUES ($1, $2) 
+		RETURNING user_id`,
+		testUsername,
+		"fakehash",
+	).Scan(&userID)
+
 	if err != nil {
 		test.Fatalf("Failed to setup user for topic test: %v", err)
 	}
 
-	// Insert Topics
+	// Create Topics
 	var topicID1, topicID2 int
-	err = repo.DB.QueryRow(ctx, "INSERT INTO topics (title, description, created_by) VALUES ($1, $2, $3) RETURNING topic_id", "Test Topic 1", "Description 1", userID).Scan(&topicID1)
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by) 
+		VALUES ($1, $2, $3) 
+		RETURNING topic_id`,
+		"Test Topic 1",
+		"Description 1",
+		userID,
+	).Scan(&topicID1)
+
 	if err != nil {
 		test.Fatal(err)
 	}
-	err = repo.DB.QueryRow(ctx, "INSERT INTO topics (title, description, created_by) VALUES ($1, $2, $3) RETURNING topic_id", "Test Topic 2", "Description 2", userID).Scan(&topicID2)
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by) 
+		VALUES ($1, $2, $3) 
+		RETURNING topic_id`,
+		"Test Topic 2",
+		"Description 2",
+		userID,
+	).Scan(&topicID2)
+
 	if err != nil {
 		test.Fatal(err)
 	}
 
 	topicIDs = append(topicIDs, topicID1, topicID2)
 
-	// Move defer HERE - right after setup, before the test executes
 	defer clearTestData(test, repo, []string{testUsername}, topicIDs)
 
-	// Execute Test (GET /api/v1/topics)
+	// Execute request (GET /api/v1/topics)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/topics", nil)
 	w := httptest.NewRecorder()
 
@@ -206,5 +261,94 @@ func TestGetAllTopics(test *testing.T) {
 
 	if !titles["Test Topic 1"] || !titles["Test Topic 2"] {
 		test.Errorf("Expected topics 'Test Topic 1' and 'Test Topic 2', got titles: %v", titles)
+	}
+}
+
+func TestGetPostsByTopicID(test *testing.T) {
+	router, repo := setupRouter(test)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create user
+	var userID int
+	err := repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash) 
+		VALUES ($1, $2) 
+		RETURNING user_id`,
+		"post_test_user",
+		"fakehash",
+	).Scan(&userID)
+
+	if err != nil {
+		test.Fatalf("Failed to setup user for post test: %v", err)
+	}
+
+	// Create topic
+	var topicID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by) 
+		VALUES ($1, $2, $3) 
+		RETURNING topic_id`,
+		"Post Test Topic",
+		"Topic for Post Test",
+		userID,
+	).Scan(&topicID)
+
+	if err != nil {
+		test.Fatalf("Failed to create topic for post test: %v", err)
+	}
+
+	// Create posts
+	_, err = repo.DB.Exec(
+		ctx,
+		`INSERT INTO posts (topic_id, title, content, created_by) 
+		VALUES ($1, $2, $3, $4), ($1, $5, $6, $7)`,
+		topicID,
+		"Post Title 1",
+		"Post Content 1",
+		userID,
+		"Post Title 2",
+		"Post Content 2",
+		userID,
+	)
+
+	if err != nil {
+		test.Fatalf("Failed to create posts for post test: %v", err)
+	}
+
+	defer clearTestData(test, repo, []string{"post_test_user"}, []int{topicID})
+
+	// Execute request (GET /api/v1/topics/:topicId/posts)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		test.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var response []data.Post
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		test.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
+	}
+
+	if len(response) != 2 {
+		test.Errorf("Expected 2 posts, got %d", len(response))
+	}
+
+	titles := make(map[string]bool)
+	for _, post := range response {
+		if post.TopicID != topicID {
+			test.Fatalf("Expected topic_id %d on posts, got %+v", topicID, response)
+		}
+		titles[post.Title] = true
+	}
+
+	if !titles["Post Title 1"] || !titles["Post Title 2"] {
+		test.Errorf("Expected posts 'Post Title 1' and 'Post Title 2', got titles: %v", titles)
 	}
 }

@@ -34,6 +34,10 @@ func main() {
 	userService := service.NewUserService(repo)
 	userHandler := api.NewUserHandler(userService)
 
+	// Posts
+	postService := service.NewPostService(repo)
+	postHandler := api.NewPostHandler(postService)
+
 	// Initialise Gin router
 	router := gin.Default()
 
@@ -45,11 +49,14 @@ func main() {
 	// Register API Routes
 	v1 := router.Group("/api/v1")
 	{
-		// Topic Routes
+		// Topics Route
 		v1.GET("/topics", topicHandler.GetAllTopics)
 
-		// User Routes
+		// Users Route
 		v1.POST("/users", userHandler.RegisterUser)
+
+		// Posts Route
+		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
 	}
 
 	// Run Server

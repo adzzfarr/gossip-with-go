@@ -9,25 +9,27 @@ import (
 
 // TopicHandler holds instance of TopicService to perform business logic
 type TopicHandler struct {
-	Service *service.TopicService
+	TopicService *service.TopicService
 }
 
 // NewTopicHandler creates a new instance of TopicHandler
-func NewTopicHandler(service *service.TopicService) *TopicHandler {
-	return &TopicHandler{Service: service}
+func NewTopicHandler(topicService *service.TopicService) *TopicHandler {
+	return &TopicHandler{TopicService: topicService}
 }
 
 // GetAllTopics handles GET requests for topics
-func (handler *TopicHandler) GetAllTopics(c *gin.Context) {
+func (handler *TopicHandler) GetAllTopics(ctx *gin.Context) {
 	// Call service layer
-	topics, err := handler.Service.GetAllTopics()
+	topics, err := handler.TopicService.GetAllTopics()
 
 	if err != nil {
 		// Log error, send ISE status to client
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch topics"})
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": "Failed to fetch topics"})
 		return
 	}
 
 	// Gin serializes 'topics' slice into JSON
-	c.JSON(http.StatusOK, topics)
+	ctx.JSON(http.StatusOK, topics)
 }

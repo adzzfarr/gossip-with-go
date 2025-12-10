@@ -111,3 +111,47 @@ func (repo *Repository) CreateUser(user *User) error {
 
 	return nil
 }
+
+// GetPostsByTopicID fetches all posts for a given topic ID
+func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		SELECT post_id, topic_id, title, content, created_by, created_at
+		FROM posts
+		WHERE topic_id = $1
+		ORDER BY created_at DESC`
+
+	rows, err := repo.DB.Query(ctx, query, topicID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query posts: %w", err)
+	}
+	defer rows.Close()
+
+	posts := []*Post{}
+	for rows.Next() {
+		var post Post
+
+		err := rows.Scan( // Match order in SELECT statement
+			&post.PostID,
+			&post.TopicID,
+			&post.Title,
+			&post.Content,
+			&post.CreatedBy,
+			&post.CreatedAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan post row: %w", err)
+		}
+
+		posts = append(posts, &post)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error encountered during row iteration: %w", err)
+	}
+
+	return posts, nil
+}

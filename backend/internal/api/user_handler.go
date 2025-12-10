@@ -15,36 +15,38 @@ type UserRegistrationRequest struct {
 
 // UserHandler holds UserService instance to perform business logic
 type UserHandler struct {
-	Service *service.UserService
+	UserService *service.UserService
 }
 
 // NewUserHandler creates a new instance of UserHandler
-func NewUserHandler(service *service.UserService) *UserHandler {
-	return &UserHandler{Service: service}
+func NewUserHandler(userService *service.UserService) *UserHandler {
+	return &UserHandler{UserService: userService}
 }
 
 // RegisterUser handles POST requests for user registration
-func (handler *UserHandler) RegisterUser(c *gin.Context) {
+func (handler *UserHandler) RegisterUser(ctx *gin.Context) {
 	var req UserRegistrationRequest
 
 	// Try to parse request body JSON into UserRegistrationRequest struct format
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input format or missing fields"})
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid input format or missing fields"})
 		return
 	}
 
 	// Call Service Layer
-	user, err := handler.Service.RegisterUser(req.Username, req.Password)
+	user, err := handler.UserService.RegisterUser(req.Username, req.Password)
 
 	if err != nil {
 		// Since service layer handles input validation (password length, complexity)
 		// and unique username checks, errors here are likely client-related (Bad Request 400)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Serialize user object (excluding PasswordHash) into JSON
-	c.JSON(http.StatusCreated, gin.H{
+	ctx.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully",
 		"user":    user,
 	})
