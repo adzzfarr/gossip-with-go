@@ -21,24 +21,24 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 
 // GetAllTopics fetches all topics from the database
 func (repo *Repository) GetAllTopics() ([]*Topic, error) {
-	// 1. Context and Deferred Cancel
+	// Context and Deferred Cancel
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensures context is cleaned up when function returns
 
-	// 2. SQL Query
+	// SQL Query
 	query := `
         SELECT topic_id, title, description, created_by, created_at
         FROM topics
         ORDER BY created_at DESC`
 
-	// 3. Execute Query
+	// Execute Query
 	rows, err := repo.DB.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query all topics failed: %w", err)
 	}
 	defer rows.Close() // Close rows after processing
 
-	// 4. Scan Results
+	// Scan Results
 	topics := []*Topic{} // Initialize empty slice of Topic pointers
 	for rows.Next() {
 		var t Topic
@@ -154,4 +154,47 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 	}
 
 	return posts, nil
+}
+
+// GetCommentsByPostID fetches all comments for a given post ID
+func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		SELECT comment_id, post_id, content, created_by, created_at
+		FROM comments
+		WHERE post_id = $1
+		ORDER BY created_at DESC`
+
+	rows, err := repo.DB.Query(ctx, query, postID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query comments: %w", err)
+	}
+	defer rows.Close()
+
+	comments := []*Comment{}
+	for rows.Next() {
+		var comment Comment
+
+		err := rows.Scan( // Match order in SELECT statement
+			&comment.CommentID,
+			&comment.PostID,
+			&comment.Content,
+			&comment.CreatedBy,
+			&comment.CreatedAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan comment row: %w", err)
+		}
+
+		comments = append(comments, &comment)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error encountered during row iteration: %w", err)
+	}
+
+	return comments, nil
 }

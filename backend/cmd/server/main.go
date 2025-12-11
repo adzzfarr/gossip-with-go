@@ -38,6 +38,10 @@ func main() {
 	postService := service.NewPostService(repo)
 	postHandler := api.NewPostHandler(postService)
 
+	// Comments
+	commentService := service.NewCommentService(repo)
+	commentHandler := api.NewCommentHandler(commentService)
+
 	// Initialise Gin router
 	router := gin.Default()
 
@@ -57,6 +61,9 @@ func main() {
 
 		// Posts Route
 		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
+
+		// Comments Route
+		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
 	}
 
 	// Run Server

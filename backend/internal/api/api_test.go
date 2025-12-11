@@ -1,4 +1,5 @@
-// Run `go test -v ./...` in /backend
+// Run `go test -v ./internal/api` in /backend to run all tests
+// Run `go test -v ./internal/api -run {test name e.g. 'TestGetAllTopics'}` to run a specific test
 package api
 
 import (
@@ -36,6 +37,9 @@ func setupRouter(test *testing.T) (*gin.Engine, *data.Repository) {
 	postService := service.NewPostService(repo)
 	postHandler := NewPostHandler(postService)
 
+	commentService := service.NewCommentService(repo)
+	commentHandler := NewCommentHandler(commentService)
+
 	// Set up router
 	router := gin.Default()
 	v1 := router.Group("/api/v1")
@@ -43,6 +47,7 @@ func setupRouter(test *testing.T) (*gin.Engine, *data.Repository) {
 		v1.GET("/topics", topicHandler.GetAllTopics)
 		v1.POST("/users", userHandler.RegisterUser)
 		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
+		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
 	}
 
 	return router, repo
@@ -350,5 +355,103 @@ func TestGetPostsByTopicID(test *testing.T) {
 
 	if !titles["Post Title 1"] || !titles["Post Title 2"] {
 		test.Errorf("Expected posts 'Post Title 1' and 'Post Title 2', got titles: %v", titles)
+	}
+}
+
+func TestGetCommentsByPostID(test *testing.T) {
+	router, repo := setupRouter(test)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create user
+	var userID int
+	err := repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		"comment_test_user",
+		"fakehash",
+	).Scan(&userID)
+
+	if err != nil {
+		test.Fatalf("Failed to setup user for comment test: %v", err)
+	}
+
+	// Create topic
+	var topicID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by)
+		VALUES ($1, $2, $3)
+		RETURNING topic_id`,
+		"Comment Test Topic",
+		"Topic for Comment Test",
+		userID,
+	).Scan(&topicID)
+
+	if err != nil {
+		test.Fatalf("Failed to create topic for comment test: %v", err)
+	}
+
+	// Create post
+	var postID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO posts (topic_id, title, content, created_by)
+		VALUES ($1, $2, $3, $4)
+		RETURNING post_id`,
+		topicID,
+		"Comment Test Post",
+		"Post for Comment Test",
+		userID,
+	).Scan(&postID)
+
+	if err != nil {
+		test.Fatalf("Failed to create post for comment test: %v", err)
+	}
+
+	// Create comments
+	_, err = repo.DB.Exec(
+		ctx,
+		`INSERT INTO comments (post_id, content, created_by)
+		VALUES ($1, $2, $3), ($1, $4, $5)`,
+		postID,
+		"Comment Content 1",
+		userID,
+		"Comment Content 2",
+		userID,
+	)
+
+	if err != nil {
+		test.Fatalf("Failed to create comments for comment test: %v", err)
+	}
+
+	defer clearTestData(test, repo, []string{"comment_test_user"}, []int{topicID})
+
+	// Execute request (GET /api/v1/posts/:postID/comments)
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/posts/%d/comments", postID), nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		test.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	var response []data.Comment
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		test.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
+	}
+
+	if len(response) != 2 {
+		test.Errorf("Expected 2 comments, got %d", len(response))
+	}
+
+	for _, comment := range response {
+		if comment.PostID != postID {
+			test.Fatalf("Expected post_id %d on comments, got %+v", postID, response)
+		}
 	}
 }
