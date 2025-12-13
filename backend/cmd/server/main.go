@@ -4,6 +4,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -42,6 +43,13 @@ func main() {
 	commentService := service.NewCommentService(repo)
 	commentHandler := api.NewCommentHandler(commentService)
 
+	// JWT (Replace "secret-key" with a secure key from env variables in production)
+	jwtService := service.NewJWTService("secret-key", 24*time.Hour) // 24 hours expiry
+
+	// Login
+	loginService := service.NewLoginService(repo)
+	loginHandler := api.NewLoginHandler(loginService, jwtService)
+
 	// Initialise Gin router
 	router := gin.Default()
 
@@ -64,6 +72,9 @@ func main() {
 
 		// Comments Route
 		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
+
+		// Login Route
+		v1.POST("/login", loginHandler.LoginUser)
 	}
 
 	// Run Server

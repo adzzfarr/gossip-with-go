@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/adzzfarr/gossip-with-go/backend/internal/data"
 	"github.com/adzzfarr/gossip-with-go/backend/internal/service"
 	"github.com/gin-gonic/gin"
@@ -40,6 +42,11 @@ func setupRouter(test *testing.T) (*gin.Engine, *data.Repository) {
 	commentService := service.NewCommentService(repo)
 	commentHandler := NewCommentHandler(commentService)
 
+	jwtService := service.NewJWTService("test-secret-key", 1*time.Hour)
+
+	loginService := service.NewLoginService(repo)
+	loginHandler := NewLoginHandler(loginService, jwtService)
+
 	// Set up router
 	router := gin.Default()
 	v1 := router.Group("/api/v1")
@@ -48,6 +55,7 @@ func setupRouter(test *testing.T) (*gin.Engine, *data.Repository) {
 		v1.POST("/users", userHandler.RegisterUser)
 		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
 		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
+		v1.POST("/login", loginHandler.LoginUser)
 	}
 
 	return router, repo
@@ -56,6 +64,22 @@ func setupRouter(test *testing.T) (*gin.Engine, *data.Repository) {
 func clearTestData(test *testing.T, repo *data.Repository, usernames []string, topicIDs []int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// Delete Comments
+	for _, topicID := range topicIDs {
+		_, err := repo.DB.Exec(
+			ctx,
+			`DELETE FROM comments
+			WHERE post_id IN (
+				SELECT post_id FROM posts WHERE topic_id = $1
+			)`,
+			topicID,
+		)
+
+		if err != nil {
+			test.Logf("Warning: Failed to delete comments for test topic ID %d during teardown: %v", topicID, err)
+		}
+	}
 
 	// Delete Posts
 	for _, topicID := range topicIDs {
@@ -454,4 +478,281 @@ func TestGetCommentsByPostID(test *testing.T) {
 			test.Fatalf("Expected post_id %d on comments, got %+v", postID, response)
 		}
 	}
+}
+
+func TestLogin(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test user
+	testUsername := "test_login_user"
+	testPassword := "test_login_password"
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	_, err = repo.DB.Exec(
+		ctx,
+		`INSERT INTO users (username, password_hash) 
+		VALUES ($1, $2)`,
+		testUsername,
+		string(hashedPassword),
+	)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Cleanup
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_, _ = repo.DB.Exec(
+			ctx,
+			`DELETE FROM users WHERE username = $1`,
+			testUsername,
+		)
+	}()
+
+	// 1. Successful login
+	t.Run("SuccessfulLogin", func(t *testing.T) {
+		payload := map[string]string{
+			"username": testUsername,
+			"password": testPassword,
+		}
+		jsonPayload, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonPayload))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+
+		var response map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
+		}
+
+		tokenString, exists := response["token"]
+		if !exists || tokenString == "" {
+			t.Fatal("Response missing 'token' field")
+		}
+
+		// Validate JWT token
+		jwtService := service.NewJWTService("test-secret-key", 1*time.Hour)
+		claims, err := jwtService.ValidateToken(tokenString)
+		if err != nil {
+			t.Fatalf("Failed to validate JWT token: %v", err)
+		}
+
+		if claims.Username != testUsername {
+			t.Errorf("Expected token username %s, got %s", testUsername, claims.Username)
+		}
+	})
+
+	// 2. Wrong Password
+	t.Run("FailedLogin_WrongPassword", func(t *testing.T) {
+		payload := map[string]string{
+			"username": testUsername,
+			"password": "wrong_password",
+		}
+		jsonPayload, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonPayload))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for wrong password, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Non-existent User
+	t.Run("FailedLogin_NonExistentUser", func(t *testing.T) {
+		payload := map[string]string{
+			"username": "non_existent_user",
+			"password": "some_password",
+		}
+		jsonPayload, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonPayload))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for non-existent user, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Missing Fields
+	t.Run("FailedLogin_MissingFields", func(t *testing.T) {
+		payload := map[string]string{
+			"username": testUsername,
+			// Missing password
+		}
+		jsonPayload, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonPayload))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for missing fields, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestAuthMiddleware(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	// Create test user
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	testUsername := "auth_test_user"
+	testPassword := "auth_test_password"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	_, err = repo.DB.Exec(
+		ctx,
+		`INSERT INTO users (username, password_hash) 
+		VALUES ($1, $2)`,
+		testUsername,
+		string(hashedPassword),
+	)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Cleanup
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_, _ = repo.DB.Exec(
+			ctx,
+			`DELETE FROM users WHERE username = $1`,
+			testUsername,
+		)
+	}()
+
+	// Login to get JWT token
+	loginPayload := map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	}
+	jsonLoginPayload, _ := json.Marshal(loginPayload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonLoginPayload))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login failed with status %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	var loginResponse map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &loginResponse); err != nil {
+		t.Fatalf("Failed to unmarshal login response: %v. Body: %s", err, w.Body.String())
+	}
+
+	validTokenString, exists := loginResponse["token"]
+	if !exists || validTokenString == "" {
+		t.Fatal("Login response missing 'token' field")
+	}
+
+	// Add protected test route
+	jwtService := service.NewJWTService("test-secret-key", 1*time.Hour)
+	protected := router.Group("/api/v1/protected")
+	protected.Use(AuthMiddleware(jwtService))
+	{
+		protected.GET("/test", func(c *gin.Context) {
+			c.JSON(
+				http.StatusOK,
+				gin.H{"message": "Access granted"},
+			)
+		})
+	}
+
+	// 1. Access with valid token
+	t.Run("AccessWithValidToken", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/protected/test", nil)
+		req.Header.Set("Authorization", "Bearer "+validTokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status %d with valid token, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+	})
+
+	// 2. Access without token
+	t.Run("AccessWithoutToken", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/protected/test", nil)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d without token, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Access with invalid token
+	t.Run("AccessWithInvalidToken", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/protected/test", nil)
+		req.Header.Set("Authorization", "Bearer invalid.token.here")
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d with invalid token, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Access with malformed token
+	t.Run("AccessWithMalformedToken", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/protected/test", nil)
+		req.Header.Set("Authorization", validTokenString) // Missing "Bearer " prefix
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d with malformed token, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
 }
