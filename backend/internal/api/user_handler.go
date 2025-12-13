@@ -41,13 +41,19 @@ func (handler *UserHandler) RegisterUser(ctx *gin.Context) {
 	if err != nil {
 		// Since service layer handles input validation (password length, complexity)
 		// and unique username checks, errors here are likely client-related (Bad Request 400)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": err.Error()},
+		)
 		return
 	}
 
 	// Serialize user object (excluding PasswordHash) into JSON
-	ctx.JSON(http.StatusCreated, gin.H{
-		"message": "User registered successfully",
-		"user":    user,
-	})
+	ctx.JSON(
+		http.StatusCreated,
+		gin.H{
+			"message": "User registered successfully",
+			"user":    user,
+		},
+	)
 }
