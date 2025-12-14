@@ -20,12 +20,12 @@ import (
 )
 
 // setupRouter initializes the Gin router and all dependencies for testing
-func setupRouter(test *testing.T) (*gin.Engine, *data.Repository) {
+func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 	dbPool, err := data.OpenDB()
 	if err != nil {
-		test.Fatalf("Failed to open test database connection: %v", err)
+		t.Fatalf("Failed to open test database connection: %v", err)
 	}
-	test.Cleanup(func() { dbPool.Close() }) // Close pool after tests
+	t.Cleanup(func() { dbPool.Close() }) // Close pool after tests
 
 	repo := data.NewRepository(dbPool)
 
@@ -51,17 +51,25 @@ func setupRouter(test *testing.T) (*gin.Engine, *data.Repository) {
 	router := gin.Default()
 	v1 := router.Group("/api/v1")
 	{
+		// Public Routes
 		v1.GET("/topics", topicHandler.GetAllTopics)
 		v1.POST("/users", userHandler.RegisterUser)
 		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
 		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
 		v1.POST("/login", loginHandler.LoginUser)
+
+		// Protected Routes
+		protected := v1.Group("")
+		protected.Use(AuthMiddleware(jwtService))
+		{
+			protected.POST("/topics", topicHandler.CreateTopic)
+		}
 	}
 
 	return router, repo
 }
 
-func clearTestData(test *testing.T, repo *data.Repository, usernames []string, topicIDs []int) {
+func clearTestData(t *testing.T, repo *data.Repository, usernames []string, topicIDs []int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -77,7 +85,7 @@ func clearTestData(test *testing.T, repo *data.Repository, usernames []string, t
 		)
 
 		if err != nil {
-			test.Logf("Warning: Failed to delete comments for test topic ID %d during teardown: %v", topicID, err)
+			t.Logf("Warning: Failed to delete comments for test topic ID %d during teardown: %v", topicID, err)
 		}
 	}
 
@@ -91,7 +99,7 @@ func clearTestData(test *testing.T, repo *data.Repository, usernames []string, t
 		)
 
 		if err != nil {
-			test.Logf("Warning: Failed to delete posts for test topic ID %d during teardown: %v", topicID, err)
+			t.Logf("Warning: Failed to delete posts for test topic ID %d during teardown: %v", topicID, err)
 		}
 	}
 
@@ -105,7 +113,7 @@ func clearTestData(test *testing.T, repo *data.Repository, usernames []string, t
 		)
 
 		if err != nil {
-			test.Logf("Warning: Failed to delete test topic ID %d during teardown: %v", topicID, err)
+			t.Logf("Warning: Failed to delete test topic ID %d during teardown: %v", topicID, err)
 		}
 	}
 
@@ -119,19 +127,19 @@ func clearTestData(test *testing.T, repo *data.Repository, usernames []string, t
 		)
 
 		if err != nil {
-			test.Logf("Warning: Failed to delete test user %s during teardown: %v", username, err)
+			t.Logf("Warning: Failed to delete test user %s during teardown: %v", username, err)
 		}
 	}
 }
 
-func TestUserRegistration(test *testing.T) {
-	router, repo := setupRouter(test)
+func TestUserRegistration(t *testing.T) {
+	router, repo := setupRouter(t)
 	testUsername := "test_register_user_1"
 
-	defer clearTestData(test, repo, []string{testUsername}, nil)
+	defer clearTestData(t, repo, []string{testUsername}, nil)
 
 	// 1. Test Success Case (HTTP 201 Created)
-	test.Run("Success_UserCreated", func(t *testing.T) {
+	t.Run("Success_UserCreated", func(t *testing.T) {
 		payload := map[string]string{
 			"username": testUsername,
 			"password": "SecurePassword123",
@@ -164,7 +172,7 @@ func TestUserRegistration(test *testing.T) {
 	})
 
 	// 2. Test Failure Case (Weak Password)
-	test.Run("Failure_WeakPassword", func(t *testing.T) {
+	t.Run("Failure_WeakPassword", func(t *testing.T) {
 		payload := map[string]string{
 			"username": "weakpass",
 			"password": "a",
@@ -183,7 +191,7 @@ func TestUserRegistration(test *testing.T) {
 	})
 
 	// 3. Test Failure Case (Duplicate Username)
-	test.Run("Failure_DuplicateUsername", func(t *testing.T) {
+	t.Run("Failure_DuplicateUsername", func(t *testing.T) {
 		payload := map[string]string{
 			"username": testUsername, // This user was already created in the first test
 			"password": "AnotherPassword456",
@@ -208,8 +216,8 @@ func TestUserRegistration(test *testing.T) {
 	})
 }
 
-func TestGetAllTopics(test *testing.T) {
-	router, repo := setupRouter(test)
+func TestGetAllTopics(t *testing.T) {
+	router, repo := setupRouter(t)
 	testUsername := "topic_test_user_2"
 	topicIDs := make([]int, 0, 2)
 
@@ -228,7 +236,7 @@ func TestGetAllTopics(test *testing.T) {
 	).Scan(&userID)
 
 	if err != nil {
-		test.Fatalf("Failed to setup user for topic test: %v", err)
+		t.Fatalf("Failed to setup user for topic test: %v", err)
 	}
 
 	// Create Topics
@@ -244,7 +252,7 @@ func TestGetAllTopics(test *testing.T) {
 	).Scan(&topicID1)
 
 	if err != nil {
-		test.Fatal(err)
+		t.Fatal(err)
 	}
 	err = repo.DB.QueryRow(
 		ctx,
@@ -257,12 +265,12 @@ func TestGetAllTopics(test *testing.T) {
 	).Scan(&topicID2)
 
 	if err != nil {
-		test.Fatal(err)
+		t.Fatal(err)
 	}
 
 	topicIDs = append(topicIDs, topicID1, topicID2)
 
-	defer clearTestData(test, repo, []string{testUsername}, topicIDs)
+	defer clearTestData(t, repo, []string{testUsername}, topicIDs)
 
 	// Execute request (GET /api/v1/topics)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/topics", nil)
@@ -271,16 +279,16 @@ func TestGetAllTopics(test *testing.T) {
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		test.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+		t.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
 	var response []data.Topic
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-		test.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
+		t.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
 	}
 
 	if len(response) != 2 {
-		test.Errorf("Expected 2 topics, got %d", len(response))
+		t.Errorf("Expected 2 topics, got %d", len(response))
 	}
 
 	titles := make(map[string]bool)
@@ -289,12 +297,12 @@ func TestGetAllTopics(test *testing.T) {
 	}
 
 	if !titles["Test Topic 1"] || !titles["Test Topic 2"] {
-		test.Errorf("Expected topics 'Test Topic 1' and 'Test Topic 2', got titles: %v", titles)
+		t.Errorf("Expected topics 'Test Topic 1' and 'Test Topic 2', got titles: %v", titles)
 	}
 }
 
-func TestGetPostsByTopicID(test *testing.T) {
-	router, repo := setupRouter(test)
+func TestGetPostsByTopicID(t *testing.T) {
+	router, repo := setupRouter(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -311,7 +319,7 @@ func TestGetPostsByTopicID(test *testing.T) {
 	).Scan(&userID)
 
 	if err != nil {
-		test.Fatalf("Failed to setup user for post test: %v", err)
+		t.Fatalf("Failed to setup user for post test: %v", err)
 	}
 
 	// Create topic
@@ -327,7 +335,7 @@ func TestGetPostsByTopicID(test *testing.T) {
 	).Scan(&topicID)
 
 	if err != nil {
-		test.Fatalf("Failed to create topic for post test: %v", err)
+		t.Fatalf("Failed to create topic for post test: %v", err)
 	}
 
 	// Create posts
@@ -345,10 +353,10 @@ func TestGetPostsByTopicID(test *testing.T) {
 	)
 
 	if err != nil {
-		test.Fatalf("Failed to create posts for post test: %v", err)
+		t.Fatalf("Failed to create posts for post test: %v", err)
 	}
 
-	defer clearTestData(test, repo, []string{"post_test_user"}, []int{topicID})
+	defer clearTestData(t, repo, []string{"post_test_user"}, []int{topicID})
 
 	// Execute request (GET /api/v1/topics/:topicId/posts)
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), nil)
@@ -357,33 +365,33 @@ func TestGetPostsByTopicID(test *testing.T) {
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		test.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+		t.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
 	var response []data.Post
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-		test.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
+		t.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
 	}
 
 	if len(response) != 2 {
-		test.Errorf("Expected 2 posts, got %d", len(response))
+		t.Errorf("Expected 2 posts, got %d", len(response))
 	}
 
 	titles := make(map[string]bool)
 	for _, post := range response {
 		if post.TopicID != topicID {
-			test.Fatalf("Expected topic_id %d on posts, got %+v", topicID, response)
+			t.Fatalf("Expected topic_id %d on posts, got %+v", topicID, response)
 		}
 		titles[post.Title] = true
 	}
 
 	if !titles["Post Title 1"] || !titles["Post Title 2"] {
-		test.Errorf("Expected posts 'Post Title 1' and 'Post Title 2', got titles: %v", titles)
+		t.Errorf("Expected posts 'Post Title 1' and 'Post Title 2', got titles: %v", titles)
 	}
 }
 
-func TestGetCommentsByPostID(test *testing.T) {
-	router, repo := setupRouter(test)
+func TestGetCommentsByPostID(t *testing.T) {
+	router, repo := setupRouter(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -400,7 +408,7 @@ func TestGetCommentsByPostID(test *testing.T) {
 	).Scan(&userID)
 
 	if err != nil {
-		test.Fatalf("Failed to setup user for comment test: %v", err)
+		t.Fatalf("Failed to setup user for comment test: %v", err)
 	}
 
 	// Create topic
@@ -416,7 +424,7 @@ func TestGetCommentsByPostID(test *testing.T) {
 	).Scan(&topicID)
 
 	if err != nil {
-		test.Fatalf("Failed to create topic for comment test: %v", err)
+		t.Fatalf("Failed to create topic for comment test: %v", err)
 	}
 
 	// Create post
@@ -433,7 +441,7 @@ func TestGetCommentsByPostID(test *testing.T) {
 	).Scan(&postID)
 
 	if err != nil {
-		test.Fatalf("Failed to create post for comment test: %v", err)
+		t.Fatalf("Failed to create post for comment test: %v", err)
 	}
 
 	// Create comments
@@ -449,10 +457,10 @@ func TestGetCommentsByPostID(test *testing.T) {
 	)
 
 	if err != nil {
-		test.Fatalf("Failed to create comments for comment test: %v", err)
+		t.Fatalf("Failed to create comments for comment test: %v", err)
 	}
 
-	defer clearTestData(test, repo, []string{"comment_test_user"}, []int{topicID})
+	defer clearTestData(t, repo, []string{"comment_test_user"}, []int{topicID})
 
 	// Execute request (GET /api/v1/posts/:postID/comments)
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/posts/%d/comments", postID), nil)
@@ -461,21 +469,21 @@ func TestGetCommentsByPostID(test *testing.T) {
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		test.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+		t.Fatalf("Expected status %d, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
 	}
 
 	var response []data.Comment
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
-		test.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
+		t.Fatalf("Failed to unmarshal response: %v. Body: %s", err, w.Body.String())
 	}
 
 	if len(response) != 2 {
-		test.Errorf("Expected 2 comments, got %d", len(response))
+		t.Errorf("Expected 2 comments, got %d", len(response))
 	}
 
 	for _, comment := range response {
 		if comment.PostID != postID {
-			test.Fatalf("Expected post_id %d on comments, got %+v", postID, response)
+			t.Fatalf("Expected post_id %d on comments, got %+v", postID, response)
 		}
 	}
 }
@@ -753,6 +761,174 @@ func TestAuthMiddleware(t *testing.T) {
 
 		if w.Code != http.StatusUnauthorized {
 			t.Fatalf("Expected status %d with malformed token, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestCreateTopic(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test user
+	testUsername := "create_topic_user"
+	testPassword := "create_topic_password"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	var userID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		testUsername,
+		string(hashedPassword),
+	).Scan(&userID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Login to get JWT token
+	loginPayload := map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	}
+
+	jsonLoginPayload, _ := json.Marshal(loginPayload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonLoginPayload))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	var loginResponse map[string]string
+
+	json.Unmarshal(w.Body.Bytes(), &loginResponse)
+	tokenString, exists := loginResponse["token"]
+	if !exists || tokenString == "" {
+		t.Fatal("Login response missing 'token' field")
+	}
+
+	// Store topicIDs for cleanup
+	topicIDs := []int{}
+
+	defer clearTestData(t, repo, []string{testUsername}, topicIDs)
+
+	// 1. Successful Topic Creation
+	t.Run("SuccessfulTopicCreation", func(t *testing.T) {
+		topicPayload := map[string]string{
+			"title":       "New Test Topic",
+			"description": "This is a test topic created during testing.",
+		}
+		jsonTopicPayload, _ := json.Marshal(topicPayload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/topics", bytes.NewBuffer(jsonTopicPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("Expected status %d for topic creation, got %d. Response: %s", http.StatusCreated, w.Code, w.Body.String())
+		}
+
+		var response data.Topic
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response.Title != topicPayload["title"] {
+			t.Errorf("Expected topic title %s, got %s", topicPayload["title"], response.Title)
+		}
+
+		if response.Description != topicPayload["description"] {
+			t.Errorf("Expected topic description %s, got %s", topicPayload["description"], response.Description)
+		}
+
+		if response.CreatedBy != userID {
+			t.Errorf("Expected topic created_by %d, got %d", userID, response.CreatedBy)
+		}
+
+		// Add to cleanup list
+		topicIDs = append(topicIDs, response.TopicID)
+	})
+
+	// 2. Topic Creation without Authentication Token
+	t.Run("TopicCreationWithoutAuthenticationToken", func(t *testing.T) {
+		topicPayload := map[string]string{
+			"title":       "Unauthorized Topic",
+			"description": "This topic should not be created.",
+		}
+		jsonTopicPayload, _ := json.Marshal(topicPayload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/topics", bytes.NewBuffer(jsonTopicPayload))
+		req.Header.Set("Content-Type", "application/json")
+		// No Authorization header
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for unauthorized topic creation, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Topic Creation with Missing Title
+	t.Run("TopicCreationWithMissingTitle", func(t *testing.T) {
+		topicPayload := map[string]string{
+			// Missing title
+			"description": "This topic has no title.",
+		}
+		jsonTopicPayload, _ := json.Marshal(topicPayload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/topics", bytes.NewBuffer(jsonTopicPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for topic creation with missing fields, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Topic Creation with Title Exceeding Max Length
+	t.Run("TopicCreationWithTitleExceedingMaxLength", func(t *testing.T) {
+		longTitle := ""
+		for i := 0; i < 201; i++ { // Max length is 200 characters
+			longTitle += "a"
+		}
+
+		topicPayload := map[string]string{
+			"title":       longTitle,
+			"description": "This topic has an excessively long title.",
+		}
+		jsonTopicPayload, _ := json.Marshal(topicPayload)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/topics", bytes.NewBuffer(jsonTopicPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for topic creation with long title, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
 		}
 	})
 }

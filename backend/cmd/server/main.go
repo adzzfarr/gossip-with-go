@@ -61,20 +61,19 @@ func main() {
 	// Register API Routes
 	v1 := router.Group("/api/v1")
 	{
-		// Topics Route
+		// Public Routes (No Auth Required)
 		v1.GET("/topics", topicHandler.GetAllTopics)
-
-		// Users Route
 		v1.POST("/users", userHandler.RegisterUser)
-
-		// Posts Route
 		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
-
-		// Comments Route
 		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
-
-		// Login Route
 		v1.POST("/login", loginHandler.LoginUser)
+
+		// Protected Routes (Auth Required)
+		protected := v1.Group("")
+		protected.Use(api.AuthMiddleware(jwtService))
+		{
+			protected.POST("/topics", topicHandler.CreateTopic)
+		}
 	}
 
 	// Run Server

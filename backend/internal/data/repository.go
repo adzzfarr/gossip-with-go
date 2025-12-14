@@ -112,6 +112,40 @@ func (repo *Repository) CreateUser(user *User) error {
 	return nil
 }
 
+// CreateTopic inserts a new topic into the database
+func (repo *Repository) CreateTopic(title, description string, createdBy int) (*Topic, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		INSERT INTO topics (title, description, created_by)
+		VALUES ($1, $2, $3)
+		RETURNING topic_id, title, description, created_by, created_at
+	`
+
+	// Scan returned row into Topic struct
+	var topic Topic
+	err := repo.DB.QueryRow(
+		ctx,
+		query,
+		title,
+		description,
+		createdBy,
+	).Scan(
+		&topic.TopicID,
+		&topic.Title,
+		&topic.Description,
+		&topic.CreatedBy,
+		&topic.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create topic: %w", err)
+	}
+
+	return &topic, nil
+}
+
 // GetPostsByTopicID fetches all posts for a given topic ID
 func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 	ctx, cancel := context.WithCancel(context.Background())
