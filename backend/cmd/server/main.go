@@ -73,6 +73,7 @@ func main() {
 		protected.Use(api.AuthMiddleware(jwtService))
 		{
 			protected.POST("/topics", topicHandler.CreateTopic)
+			protected.POST("/posts", postHandler.CreatePost)
 		}
 	}
 

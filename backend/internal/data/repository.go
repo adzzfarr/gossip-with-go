@@ -152,7 +152,7 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 	defer cancel()
 
 	query := `
-		SELECT post_id, topic_id, title, content, created_by, created_at
+		SELECT post_id, topic_id, title, content, created_by, created_at, updated_at
 		FROM posts
 		WHERE topic_id = $1
 		ORDER BY created_at DESC`
@@ -174,6 +174,7 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 			&post.Content,
 			&post.CreatedBy,
 			&post.CreatedAt,
+			&post.UpdatedAt,
 		)
 
 		if err != nil {
@@ -196,7 +197,7 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 	defer cancel()
 
 	query := `
-		SELECT comment_id, post_id, content, created_by, created_at
+		SELECT comment_id, post_id, content, created_by, created_at, updated_at
 		FROM comments
 		WHERE post_id = $1
 		ORDER BY created_at DESC`
@@ -217,6 +218,7 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 			&comment.Content,
 			&comment.CreatedBy,
 			&comment.CreatedAt,
+			&comment.UpdatedAt,
 		)
 
 		if err != nil {
@@ -231,4 +233,40 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 	}
 
 	return comments, nil
+}
+
+// CreatePost inserts a new post into the database
+func (repo *Repository) CreatePost(topicID int, title, content string, createdBy int) (*Post, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		INSERT INTO psots (topic_id, title, content, created_by)
+		VALUES ($1, $2, $3, $4)
+		RETURNING post_id, topic_id, title, content, created_by, created_at, updated_at`
+
+	var post Post
+	err := repo.DB.QueryRow(
+		ctx,
+		query,
+		topicID,
+		title,
+		content,
+		createdBy,
+	).Scan(
+		&post.PostID,
+		&post.TopicID,
+		&post.Title,
+		&post.Content,
+		&post.CreatedBy,
+		&post.CreatedAt,
+		&post.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create post: %w", err)
+	}
+
+	return &post, nil
+
 }

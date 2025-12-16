@@ -63,6 +63,7 @@ func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 		protected.Use(AuthMiddleware(jwtService))
 		{
 			protected.POST("/topics", topicHandler.CreateTopic)
+			protected.POST("/posts", postHandler.CreatePost)
 		}
 	}
 
@@ -73,37 +74,7 @@ func clearTestData(t *testing.T, repo *data.Repository, usernames []string, topi
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Delete Comments
-	for _, topicID := range topicIDs {
-		_, err := repo.DB.Exec(
-			ctx,
-			`DELETE FROM comments
-			WHERE post_id IN (
-				SELECT post_id FROM posts WHERE topic_id = $1
-			)`,
-			topicID,
-		)
-
-		if err != nil {
-			t.Logf("Warning: Failed to delete comments for test topic ID %d during teardown: %v", topicID, err)
-		}
-	}
-
-	// Delete Posts
-	for _, topicID := range topicIDs {
-		_, err := repo.DB.Exec(
-			ctx,
-			`DELETE FROM posts
-			WHERE topic_id = $1`,
-			topicID,
-		)
-
-		if err != nil {
-			t.Logf("Warning: Failed to delete posts for test topic ID %d during teardown: %v", topicID, err)
-		}
-	}
-
-	// Delete Topics
+	// Delete Topics (CASCADE deletes Posts and Comments automatically)
 	for _, topicID := range topicIDs {
 		_, err := repo.DB.Exec(
 			ctx,
@@ -134,7 +105,7 @@ func clearTestData(t *testing.T, repo *data.Repository, usernames []string, topi
 
 func TestUserRegistration(t *testing.T) {
 	router, repo := setupRouter(t)
-	testUsername := "test_register_user_1"
+	testUsername := "test_register_user"
 
 	defer clearTestData(t, repo, []string{testUsername}, nil)
 
@@ -218,7 +189,7 @@ func TestUserRegistration(t *testing.T) {
 
 func TestGetAllTopics(t *testing.T) {
 	router, repo := setupRouter(t)
-	testUsername := "topic_test_user_2"
+	testUsername := "test_get_topics_user"
 	topicIDs := make([]int, 0, 2)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -516,16 +487,7 @@ func TestLogin(t *testing.T) {
 	}
 
 	// Cleanup
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		_, _ = repo.DB.Exec(
-			ctx,
-			`DELETE FROM users WHERE username = $1`,
-			testUsername,
-		)
-	}()
+	defer clearTestData(t, repo, []string{testUsername}, nil)
 
 	// 1. Successful login
 	t.Run("SuccessfulLogin", func(t *testing.T) {
@@ -636,8 +598,8 @@ func TestAuthMiddleware(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	testUsername := "auth_test_user"
-	testPassword := "auth_test_password"
+	testUsername := "test_auth_user"
+	testPassword := "test_auth_password"
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -657,16 +619,7 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 
 	// Cleanup
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		_, _ = repo.DB.Exec(
-			ctx,
-			`DELETE FROM users WHERE username = $1`,
-			testUsername,
-		)
-	}()
+	defer clearTestData(t, repo, []string{testUsername}, nil)
 
 	// Login to get JWT token
 	loginPayload := map[string]string{
@@ -772,8 +725,8 @@ func TestCreateTopic(t *testing.T) {
 	defer cancel()
 
 	// Create test user
-	testUsername := "create_topic_user"
-	testPassword := "create_topic_password"
+	testUsername := "test_create_topic_user"
+	testPassword := "test_create_topic_password"
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
 
@@ -821,7 +774,9 @@ func TestCreateTopic(t *testing.T) {
 	// Store topicIDs for cleanup
 	topicIDs := []int{}
 
-	defer clearTestData(t, repo, []string{testUsername}, topicIDs)
+	defer func() {
+		clearTestData(t, repo, []string{testUsername}, topicIDs)
+	}()
 
 	// 1. Successful Topic Creation
 	t.Run("SuccessfulTopicCreation", func(t *testing.T) {

@@ -80,6 +80,6 @@ func (handler *TopicHandler) CreateTopic(ctx *gin.Context) {
 		return
 	}
 
-	// Return created topic with 201 status
+	// Return created topic
 	ctx.JSON(http.StatusCreated, topic)
 }
