@@ -241,7 +241,7 @@ func (repo *Repository) CreatePost(topicID int, title, content string, createdBy
 	defer cancel()
 
 	query := `
-		INSERT INTO psots (topic_id, title, content, created_by)
+		INSERT INTO posts (topic_id, title, content, created_by)
 		VALUES ($1, $2, $3, $4)
 		RETURNING post_id, topic_id, title, content, created_by, created_at, updated_at`
 
@@ -268,5 +268,37 @@ func (repo *Repository) CreatePost(topicID int, title, content string, createdBy
 	}
 
 	return &post, nil
+}
 
+// CreateComment inserts a new comment into the database
+func (repo *Repository) CreateComment(postID int, content string, createdBy int) (*Comment, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		INSERT INTO comments (post_id, content, created_by)
+		VALUES ($1, $2, $3)
+		RETURNING comment_id, post_id, content, created_by, created_at, updated_at`
+
+	var comment Comment
+	err := repo.DB.QueryRow(
+		ctx,
+		query,
+		postID,
+		content,
+		createdBy,
+	).Scan(
+		&comment.CommentID,
+		&comment.PostID,
+		&comment.Content,
+		&comment.CreatedBy,
+		&comment.CreatedAt,
+		&comment.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create comment: %w", err)
+	}
+
+	return &comment, nil
 }

@@ -37,3 +37,22 @@ func (commentService *CommentService) GetCommentsByPostID(postID int) ([]*data.C
 
 	return comments, nil
 }
+
+// CreateComment creates a new comment on a post
+func (commentService *CommentService) CreateComment(postID int, content string, createdBy int) (*data.Comment, error) {
+	// Content Validation
+	if content == "" {
+		return nil, fmt.Errorf("content cannot be empty")
+	}
+	if len(content) > 2000 {
+		return nil, fmt.Errorf("content exceeds maximum length of 2000 characters")
+	}
+
+	// Create comment
+	createdComment, err := commentService.Repo.CreateComment(postID, content, createdBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create comment: %w", err)
+	}
+
+	return createdComment, nil
+}

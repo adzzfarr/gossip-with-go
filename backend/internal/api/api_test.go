@@ -1,5 +1,8 @@
-// Run `go test -v ./internal/api` in /backend to run all tests
-// Run `go test -v ./internal/api -run {test name e.g. 'TestGetAllTopics'}` to run a specific test
+/*
+Run `go test -v ./internal/api` in /backend to run all tests
+Run `go test -v ./internal/api -run {test name e.g. 'TestGetAllTopics'}` to run a specific test
+Run `docker compose exec db psql -U user -d forum_db -c "SELECT 'users' as table_name, COUNT(*) FROM users UNION ALL SELECT 'topics', COUNT(*) FROM topics UNION ALL SELECT 'posts', COUNT(*) FROM posts UNION ALL SELECT 'comments', COUNT(*) FROM comments;" to check if db has been cleared`
+*/
 package api
 
 import (
@@ -63,7 +66,8 @@ func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 		protected.Use(AuthMiddleware(jwtService))
 		{
 			protected.POST("/topics", topicHandler.CreateTopic)
-			protected.POST("/posts", postHandler.CreatePost)
+			protected.POST("/topics/:topicId/posts", postHandler.CreatePost)
+			protected.POST("/posts/:postID/comments", commentHandler.CreateComment)
 		}
 	}
 
@@ -134,8 +138,10 @@ func TestUserRegistration(t *testing.T) {
 		json.Unmarshal(w.Body.Bytes(), &response)
 
 		if user, ok := response["user"].(map[string]interface{}); ok {
-			if user["username"] != testUsername {
-				t.Errorf("Expected username %s, got %s", testUsername, user["username"])
+			if username, ok := user["username"].(string); ok && username == testUsername {
+				// Username matches expected value
+			} else {
+				t.Errorf("Expected username %s, got %v", testUsername, user["username"])
 			}
 		} else {
 			t.Fatal("Response body missing 'user' object.")
@@ -884,6 +890,500 @@ func TestCreateTopic(t *testing.T) {
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("Expected status %d for topic creation with long title, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestCreatePost(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test user
+	testUsername := "test_create_post_user"
+	testPassword := "test_create_post_password"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	var userID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		testUsername,
+		string(hashedPassword),
+	).Scan(&userID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Create test topic
+	var topicID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by)
+		VALUES ($1, $2, $3)
+		RETURNING topic_id`,
+		"Test Topic for Post Creation",
+		"Topic Description",
+		userID,
+	).Scan(&topicID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test topic: %v", err)
+	}
+
+	// Login to get JWT token
+	loginPayload := map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	}
+
+	jsonLoginPayload, _ := json.Marshal(loginPayload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonLoginPayload))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	var loginResponse map[string]string
+
+	json.Unmarshal(w.Body.Bytes(), &loginResponse)
+	tokenString, exists := loginResponse["token"]
+	if !exists || tokenString == "" {
+		t.Fatal("Login response missing 'token' field")
+	}
+
+	// Cleanup
+	defer func() {
+		clearTestData(t, repo, []string{testUsername}, []int{topicID})
+	}()
+
+	// 1. Successful Post Creation
+	t.Run("SuccessfulPostCreation", func(t *testing.T) {
+		postPayload := map[string]string{
+			"title":   "New Test Post",
+			"content": "This is a test post created during testing.",
+		}
+		jsonPostPayload, _ := json.Marshal(postPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), bytes.NewBuffer(jsonPostPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("Expected status %d for post creation, got %d. Response: %s", http.StatusCreated, w.Code, w.Body.String())
+		}
+
+		var response data.Post
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response.Title != postPayload["title"] {
+			t.Errorf("Expected post title %s, got %s", postPayload["title"], response.Title)
+		}
+
+		if response.Content != postPayload["content"] {
+			t.Errorf("Expected post content %s, got %s", postPayload["content"], response.Content)
+		}
+
+		if response.TopicID != topicID {
+			t.Errorf("Expected post topic_id %d, got %d", topicID, response.TopicID)
+		}
+
+		if response.CreatedBy != userID {
+			t.Errorf("Expected post created_by %d, got %d", userID, response.CreatedBy)
+		}
+	})
+
+	// 2. Post Creation without Authentication Token
+	t.Run("PostCreationWithoutAuthenticationToken", func(t *testing.T) {
+		postPayload := map[string]string{
+			"title":   "Unauthorized Post",
+			"content": "This post should not be created.",
+		}
+		jsonPostPayload, _ := json.Marshal(postPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), bytes.NewBuffer(jsonPostPayload))
+		req.Header.Set("Content-Type", "application/json")
+		// No Authorization header
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for unauthorized post creation, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Post Creation with Missing Title
+	t.Run("PostCreationWithMissingTitle", func(t *testing.T) {
+		postPayload := map[string]string{
+			// Missing title
+			"content": "This post has no title.",
+		}
+		jsonPostPayload, _ := json.Marshal(postPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), bytes.NewBuffer(jsonPostPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for post creation with missing fields, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Post Creation with Title Exceeding Max Length
+	t.Run("PostCreationWithTitleExceedingMaxLength", func(t *testing.T) {
+		longTitle := ""
+		for i := 0; i < 201; i++ { // Max length is 200 characters
+			longTitle += "a"
+		}
+
+		postPayload := map[string]string{
+			"title":   longTitle,
+			"content": "This post has an excessively long title.",
+		}
+		jsonPostPayload, _ := json.Marshal(postPayload)
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), bytes.NewBuffer(jsonPostPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for post creation with long title, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 5. Post Creation with Missing Content
+	t.Run("PostCreationWithMissingContent", func(t *testing.T) {
+		postPayload := map[string]string{
+			"title": "Post Without Content",
+			// Missing content
+		}
+		jsonPostPayload, _ := json.Marshal(postPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), bytes.NewBuffer(jsonPostPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for post creation with missing content, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 6. Post Creation with Content Exceeding Max Length
+	t.Run("PostCreationWithContentExceedingMaxLength", func(t *testing.T) {
+		longContent := ""
+		for i := 0; i < 5001; i++ { // Max length is 5000 characters
+			longContent += "a"
+		}
+
+		postPayload := map[string]string{
+			"title":   "Post With Long Content",
+			"content": longContent,
+		}
+		jsonPostPayload, _ := json.Marshal(postPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), bytes.NewBuffer(jsonPostPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for post creation with long content, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 7. Post Creation under Non-existent Topic
+	t.Run("PostCreationUnderNonExistentTopic", func(t *testing.T) {
+		postPayload := map[string]string{
+			"title":   "Post Under Non-existent Topic",
+			"content": "This post is under a topic that does not exist.",
+		}
+		jsonPostPayload, _ := json.Marshal(postPayload)
+
+		req := httptest.NewRequest(
+			http.MethodPost,
+			fmt.Sprintf("/api/v1/topics/%d/posts", 9999999), // Assuming this topic ID does not exist
+			bytes.NewBuffer(jsonPostPayload),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for post creation under non-existent topic, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestCreateComment(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test user
+	testUsername := "test_create_comment_user"
+	testPassword := "test_create_comment_password"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	var userID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		testUsername,
+		string(hashedPassword),
+	).Scan(&userID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Create test topic
+	var topicID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by)
+		VALUES ($1, $2, $3)
+		RETURNING topic_id`,
+		"Test Topic for Comment Creation",
+		"Topic Description",
+		userID,
+	).Scan(&topicID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test topic: %v", err)
+	}
+
+	// Create test post
+	var postID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO posts (topic_id, title, content, created_by)
+		VALUES ($1, $2, $3, $4)
+		RETURNING post_id`,
+		topicID,
+		"Test Post for Comment Creation",
+		"Post Content",
+		userID,
+	).Scan(&postID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test post: %v", err)
+	}
+
+	// Login to get JWT token
+	loginPayload := map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	}
+
+	jsonLoginPayload, _ := json.Marshal(loginPayload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonLoginPayload))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	var loginResponse map[string]string
+
+	json.Unmarshal(w.Body.Bytes(), &loginResponse)
+	tokenString, exists := loginResponse["token"]
+	if !exists || tokenString == "" {
+		t.Fatal("Login response missing 'token' field")
+	}
+
+	// Cleanup
+	defer func() {
+		clearTestData(t, repo, []string{testUsername}, []int{topicID})
+	}()
+
+	// 1. Successful Comment Creation
+	t.Run("SuccessfulCommentCreation", func(t *testing.T) {
+		commentPayload := map[string]string{
+			"content": "This is a test comment created during testing.",
+		}
+		jsonCommentPayload, _ := json.Marshal(commentPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/comments", postID), bytes.NewBuffer(jsonCommentPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Fatalf("Expected status %d for comment creation, got %d. Response: %s", http.StatusCreated, w.Code, w.Body.String())
+		}
+
+		var response data.Comment
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response.Content != commentPayload["content"] {
+			t.Errorf("Expected comment content %s, got %s", commentPayload["content"], response.Content)
+		}
+
+		if response.PostID != postID {
+			t.Errorf("Expected comment post_id %d, got %d", postID, response.PostID)
+		}
+
+		if response.CreatedBy != userID {
+			t.Errorf("Expected comment created_by %d, got %d", userID, response.CreatedBy)
+		}
+	})
+
+	// 2. Comment Creation without Authentication Token
+	t.Run("CommentCreationWithoutAuthenticationToken", func(t *testing.T) {
+		commentPayload := map[string]string{
+			"content": "This comment should not be created.",
+		}
+		jsonCommentPayload, _ := json.Marshal(commentPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/comments", postID), bytes.NewBuffer(jsonCommentPayload))
+		req.Header.Set("Content-Type", "application/json")
+		// No Authorization header
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for unauthorized comment creation, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Comment Creation with Missing Content
+	t.Run("CommentCreationWithMissingContent", func(t *testing.T) {
+		commentPayload := map[string]string{
+			// Missing content
+		}
+		jsonCommentPayload, _ := json.Marshal(commentPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/comments", postID), bytes.NewBuffer(jsonCommentPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for comment creation with missing content, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Comment Creation with Content Exceeding Max Length
+	t.Run("CommentCreationWithContentExceedingMaxLength", func(t *testing.T) {
+		longContent := ""
+		for i := 0; i < 2001; i++ { // Max length is 2000 characters
+			longContent += "a"
+		}
+
+		commentPayload := map[string]string{
+			"content": longContent,
+		}
+		jsonCommentPayload, _ := json.Marshal(commentPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/comments", postID), bytes.NewBuffer(jsonCommentPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for comment creation with long content, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 5. Comment Creation under Non-existent Post
+	t.Run("CommentCreationUnderNonExistentPost", func(t *testing.T) {
+		commentPayload := map[string]string{
+			"content": "This comment is under a post that does not exist.",
+		}
+		jsonCommentPayload, _ := json.Marshal(commentPayload)
+
+		req := httptest.NewRequest(
+			http.MethodPost,
+			fmt.Sprintf("/api/v1/posts/%d/comments", 9999999), // Assuming this post ID does not exist
+			bytes.NewBuffer(jsonCommentPayload),
+		)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("Expected status %d for comment creation under non-existent post, got %d. Response: %s", http.StatusInternalServerError, w.Code, w.Body.String())
+		}
+	})
+
+	// 6. Comment Creation with Empty Content
+	t.Run("CommentCreationWithEmptyContent", func(t *testing.T) {
+		commentPayload := map[string]string{
+			"content": "",
+		}
+		jsonCommentPayload, _ := json.Marshal(commentPayload)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/comments", postID), bytes.NewBuffer(jsonCommentPayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for comment creation with empty content, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
 		}
 	})
 }
