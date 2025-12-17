@@ -318,11 +318,37 @@ func (repo *Repository) CreateComment(postID int, content string, createdBy int)
 	return &comment, nil
 }
 
-/*
 // UpdateTopic updates an existing topic's title and description
 func (repo *Repository) UpdateTopic(topicID int, title, description string, userID int) (*Topic, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Verify that topic exists and was created by the user
+	var creatorID int
+
+	checkQuery := `
+		SELECT created_by
+		FROM topics
+		WHERE topic_id = $1`
+
+	err := repo.DB.QueryRow(
+		ctx,
+		checkQuery,
+		topicID,
+	).Scan(&creatorID)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("topic with ID %d not found", topicID)
+		}
+		return nil, fmt.Errorf("failed to verify topic ownership: %w", err)
+	}
+
+	if creatorID != userID {
+		return nil, fmt.Errorf("user %d is not authorized to update topic %d", userID, topicID)
+	}
+
+	// Update topic
 
 	query := `
 		UPDATE topics
@@ -330,8 +356,8 @@ func (repo *Repository) UpdateTopic(topicID int, title, description string, user
 		WHERE topic_id = $3 AND created_by = $4
 		RETURNING topic_id, title, description, created_by, created_at, updated_at`
 
-	var topic Topic
-	err := repo.DB.QueryRow(
+	var updatedTopic Topic
+	err = repo.DB.QueryRow(
 		ctx,
 		query,
 		title,
@@ -339,14 +365,17 @@ func (repo *Repository) UpdateTopic(topicID int, title, description string, user
 		topicID,
 		userID,
 	).Scan(
-		&topic.TopicID,
-		&topic.Title,
-		&topic.Description,
-		&topic.CreatedBy,
-		&topic.CreatedAt,
-		&topic.UpdatedAt,
+		&updatedTopic.TopicID,
+		&updatedTopic.Title,
+		&updatedTopic.Description,
+		&updatedTopic.CreatedBy,
+		&updatedTopic.CreatedAt,
+		&updatedTopic.UpdatedAt,
 	)
 
-}
+	if err != nil {
+		return nil, fmt.Errorf("failed to update topic: %w", err)
+	}
 
-*/
+	return &updatedTopic, nil
+}

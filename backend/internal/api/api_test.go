@@ -1,7 +1,9 @@
 /*
 Run `go test -v ./internal/api` in /backend to run all tests
 Run `go test -v ./internal/api -run {test name e.g. 'TestGetAllTopics'}` to run a specific test
-Run `docker compose exec db psql -U user -d forum_db -c "SELECT 'users' as table_name, COUNT(*) FROM users UNION ALL SELECT 'topics', COUNT(*) FROM topics UNION ALL SELECT 'posts', COUNT(*) FROM posts UNION ALL SELECT 'comments', COUNT(*) FROM comments;" to check if db has been cleared`
+Run `docker compose exec db psql -U user -d forum_db` to access database, then run
+SELECT 'users' as table_name, COUNT(*) FROM users UNION ALL SELECT 'topics', COUNT(*) FROM topics UNION ALL SELECT 'posts', COUNT(*) FROM posts UNION ALL SELECT 'comments', COUNT(*) FROM comments;
+to check if db has been cleared
 */
 package api
 
@@ -66,6 +68,7 @@ func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 		protected.Use(AuthMiddleware(jwtService))
 		{
 			protected.POST("/topics", topicHandler.CreateTopic)
+			protected.PUT("/topics/:topicId", topicHandler.UpdateTopic)
 			protected.POST("/topics/:topicId/posts", postHandler.CreatePost)
 			protected.POST("/posts/:postID/comments", commentHandler.CreateComment)
 		}
@@ -1384,6 +1387,271 @@ func TestCreateComment(t *testing.T) {
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("Expected status %d for comment creation with empty content, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestUpdateTopic(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test user
+	testUsername := "test_update_topic_user"
+	testPassword := "test_update_topic_password"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	var userID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		testUsername,
+		string(hashedPassword),
+	).Scan(&userID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Create another user (for unauthorised test)
+	otherUsername := "other_user"
+	otherPassword := "other_user_password"
+
+	otherHashedPassword, err := bcrypt.GenerateFromPassword([]byte(otherPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash other user password: %v", err)
+	}
+
+	var otherUserID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		otherUsername,
+		string(otherHashedPassword),
+	).Scan(&otherUserID)
+
+	if err != nil {
+		t.Fatalf("Failed to create other test user: %v", err)
+	}
+
+	// Create test topic
+	var topicID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by)
+		VALUES ($1, $2, $3)
+		RETURNING topic_id`,
+		"Original Topic Title",
+		"Original Topic Description",
+		userID,
+	).Scan(&topicID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test topic: %v", err)
+	}
+
+	// Login as topic creator to get JWT token
+	loginPayload := map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	}
+
+	jsonLoginPayload, _ := json.Marshal(loginPayload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonLoginPayload))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	var loginResponse map[string]string
+
+	json.Unmarshal(w.Body.Bytes(), &loginResponse)
+	tokenString, exists := loginResponse["token"]
+	if !exists || tokenString == "" {
+		t.Fatal("Login response missing 'token' field")
+	}
+
+	// Login as other user to get JWT token
+	otherLoginPayload := map[string]string{
+		"username": otherUsername,
+		"password": otherPassword,
+	}
+
+	jsonOtherLoginPayload, _ := json.Marshal(otherLoginPayload)
+
+	otherReq := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonOtherLoginPayload))
+	otherReq.Header.Set("Content-Type", "application/json")
+
+	otherW := httptest.NewRecorder()
+
+	router.ServeHTTP(otherW, otherReq)
+
+	var otherLoginResponse map[string]string
+
+	json.Unmarshal(otherW.Body.Bytes(), &otherLoginResponse)
+	otherTokenString, otherExists := otherLoginResponse["token"]
+	if !otherExists || otherTokenString == "" {
+		t.Fatal("Other login response missing 'token' field")
+	}
+
+	// Cleanup
+	defer func() {
+		clearTestData(t, repo, []string{testUsername, otherUsername}, []int{topicID})
+	}()
+
+	// 1. Successful Topic Update
+	t.Run("SuccessfulTopicUpdate", func(t *testing.T) {
+		updatePayload := map[string]string{
+			"title":       "Updated Topic Title",
+			"description": "Updated Topic Description",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/topics/%d", topicID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status %d for topic update, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+
+		var response data.Topic
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response.Title != updatePayload["title"] {
+			t.Errorf("Expected updated topic title %s, got %s", updatePayload["title"], response.Title)
+		}
+
+		if response.Description != updatePayload["description"] {
+			t.Errorf("Expected updated topic description %s, got %s", updatePayload["description"], response.Description)
+		}
+	})
+
+	// 2. Topic Update without Authentication Token
+	t.Run("TopicUpdateWithoutAuthenticationToken", func(t *testing.T) {
+		updatePayload := map[string]string{
+			"title":       "Unauthorized Update Title",
+			"description": "Unauthorized Update Description",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/topics/%d", topicID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		// No Authorization header
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for unauthorized topic update, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Topic Update by Non-Owner
+	t.Run("TopicUpdateByNonOwner", func(t *testing.T) {
+		updatePayload := map[string]string{
+			"title":       "Non-Owner Update Title",
+			"description": "Non-Owner Update Description",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/topics/%d", topicID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+otherTokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("Expected status %d for topic update by non-owner, got %d. Response: %s", http.StatusForbidden, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Update Non-Existent Topic
+	t.Run("UpdateNonExistentTopic", func(t *testing.T) {
+		updatePayload := map[string]string{
+			"title":       "Update Non-Existent Title",
+			"description": "Update Non-Existent Description",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/topics/%d", 9999999), bytes.NewBuffer(jsonUpdatePayload)) // Assuming this topic ID does not exist
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("Expected status %d for update of non-existent topic, got %d. Response: %s", http.StatusNotFound, w.Code, w.Body.String())
+		}
+	})
+
+	// 5. Topic Update with Missing Title
+	t.Run("TopicUpdateWithMissingTitle", func(t *testing.T) {
+		updatePayload := map[string]string{
+			// Missing title
+			"description": "Update with Missing Title Description",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/topics/%d", topicID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for topic update with missing title, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 6. Topic Update with Title Exceeding Max Length
+	t.Run("TopicUpdateWithTitleExceedingMaxLength", func(t *testing.T) {
+		longTitle := ""
+		for i := 0; i < 201; i++ { // Max length is 200 characters
+			longTitle += "a"
+		}
+
+		updatePayload := map[string]string{
+			"title":       longTitle,
+			"description": "Update with Long Title Description",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/topics/%d", topicID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for topic update with long title, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
 		}
 	})
 }
