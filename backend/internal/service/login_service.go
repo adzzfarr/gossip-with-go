@@ -26,7 +26,7 @@ func (loginService *LoginService) Login(username, password string) (*data.User, 
 	}
 
 	// Delegate call to repository layer
-	user, err := loginService.Repo.FindUserByUsername(username)
+	user, err := loginService.Repo.GetUserByUsername(username)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user: %w", err)

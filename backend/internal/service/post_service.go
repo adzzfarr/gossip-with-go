@@ -50,7 +50,7 @@ func (postService *PostService) CreatePost(topicID int, title, content string, c
 		return nil, fmt.Errorf("title cannot be empty")
 	}
 	if len(title) > 200 {
-		return nil, fmt.Errorf("title cannot exceed 200 characters")
+		return nil, fmt.Errorf("title exceeds maximum length of 200 characters")
 	}
 
 	// Content Validation
@@ -58,7 +58,7 @@ func (postService *PostService) CreatePost(topicID int, title, content string, c
 		return nil, fmt.Errorf("content cannot be empty")
 	}
 	if len(content) > 5000 {
-		return nil, fmt.Errorf("content cannot exceed 5000 characters")
+		return nil, fmt.Errorf("content exceeds maximum length of 5000 characters")
 	}
 
 	// UserID Validation

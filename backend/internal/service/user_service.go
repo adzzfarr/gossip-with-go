@@ -48,12 +48,19 @@ func (service *UserService) RegisterUser(username, password string) (*data.User,
 		return nil, fmt.Errorf("password must contain at least one digit")
 	}
 
-	// Check if username already exists using FindUserByUsername (in repository.go)
-	existingUser, err := service.Repo.FindUserByUsername(username)
+	// Check if username already exists using GetUserByUsername (in repository.go)
+	existingUser, err := service.Repo.GetUserByUsername(username)
+
 	if err != nil {
-		return nil, fmt.Errorf("error checking existing user: %w", err)
-	}
-	if existingUser != nil {
+		// Check if "user not found" error (i.e. username is available)
+		if err.Error() != fmt.Sprintf("user not found: %s", username) {
+			// Some other database error occurred
+			return nil, fmt.Errorf("error checking existing user: %w", err)
+		}
+
+		// Username not found means username is available => proceed
+	} else if existingUser != nil {
+		// User was found means username is taken
 		return nil, fmt.Errorf("username '%s' is already taken", username)
 	}
 
@@ -70,7 +77,7 @@ func (service *UserService) RegisterUser(username, password string) (*data.User,
 	}
 
 	// Delegate to the Repository
-	if err := service.Repo.CreateUser(user); err != nil {
+	if _, err := service.Repo.CreateUser(user); err != nil {
 		// Need to check if error is due to a unique constraint violation
 		// (i.e. username already taken) for clarity and error translation
 

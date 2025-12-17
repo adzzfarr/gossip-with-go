@@ -24,7 +24,7 @@ func AuthMiddleware(jwtService *service.JWTService) gin.HandlerFunc {
 			return
 		}
 
-		// Try to extract token string
+		// Try to
 		// Expected format: "Bearer <token>"
 		var tokenString string
 		_, err := fmt.Sscanf(authHeader, "Bearer %s", &tokenString)

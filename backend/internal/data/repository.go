@@ -27,7 +27,7 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 
 	// SQL Query
 	query := `
-        SELECT topic_id, title, description, created_by, created_at
+        SELECT topic_id, title, description, created_by, created_at, updated_at
         FROM topics
         ORDER BY created_at DESC`
 
@@ -44,7 +44,14 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 		var t Topic
 
 		// Scan column values from current row into fields of the Topic struct
-		err := rows.Scan(&t.TopicID, &t.Title, &t.Description, &t.CreatedBy, &t.CreatedAt)
+		err := rows.Scan(
+			&t.TopicID,
+			&t.Title,
+			&t.Description,
+			&t.CreatedBy,
+			&t.CreatedAt,
+			&t.UpdatedAt,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning topic row: %w", err)
 		}
@@ -59,15 +66,15 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 	return topics, nil
 }
 
-// FindUserByUsername fetches user by their unique username
+// GetUserByUsername fetches user by their unique username
 // Used to check if a user exists (during registration) and to retrieve credentials (during login).
-func (repo *Repository) FindUserByUsername(username string) (*User, error) {
+func (repo *Repository) GetUserByUsername(username string) (*User, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var user User
 	query := `
-        SELECT user_id, username, password_hash, created_at
+        SELECT user_id, username, password_hash, created_at, updated_at
         FROM users
         WHERE username = $1`
 
@@ -76,11 +83,12 @@ func (repo *Repository) FindUserByUsername(username string) (*User, error) {
 		&user.Username,
 		&user.PasswordHash,
 		&user.CreatedAt,
+		&user.UpdatedAt,
 	)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil
+			return nil, fmt.Errorf("user not found: %s", username)
 		}
 		return nil, fmt.Errorf("query to find user failed: %w", err)
 	}
@@ -91,25 +99,31 @@ func (repo *Repository) FindUserByUsername(username string) (*User, error) {
 
 // CreateUser inserts a new user record into the database
 // NOTE: The password MUST already be hashed before this function is called (handled by service layer)
-func (repo *Repository) CreateUser(user *User) error {
+func (repo *Repository) CreateUser(user *User) (*User, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	query := `
-        INSERT INTO users (username, password_hash)
-        VALUES ($1, $2)
-        RETURNING user_id, created_at`
+        INSERT INTO users (username, password_hash, created_at, updated_at)
+        VALUES ($1, $2, NOW(), NOW())
+        RETURNING user_id, created_at, updated_at`
 
-	err := repo.DB.QueryRow(ctx, query, user.Username, user.PasswordHash).Scan(
+	err := repo.DB.QueryRow(
+		ctx,
+		query,
+		user.Username,
+		user.PasswordHash,
+	).Scan(
 		&user.UserID,
 		&user.CreatedAt,
+		&user.UpdatedAt,
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	return nil
+	return user, nil
 }
 
 // CreateTopic inserts a new topic into the database
@@ -118,9 +132,9 @@ func (repo *Repository) CreateTopic(title, description string, createdBy int) (*
 	defer cancel()
 
 	query := `
-		INSERT INTO topics (title, description, created_by)
-		VALUES ($1, $2, $3)
-		RETURNING topic_id, title, description, created_by, created_at
+		INSERT INTO topics (title, description, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, NOW(), NOW())
+		RETURNING topic_id, title, description, created_by, created_at, updated_at
 	`
 
 	// Scan returned row into Topic struct
@@ -137,6 +151,7 @@ func (repo *Repository) CreateTopic(title, description string, createdBy int) (*
 		&topic.Description,
 		&topic.CreatedBy,
 		&topic.CreatedAt,
+		&topic.UpdatedAt,
 	)
 
 	if err != nil {
@@ -241,8 +256,8 @@ func (repo *Repository) CreatePost(topicID int, title, content string, createdBy
 	defer cancel()
 
 	query := `
-		INSERT INTO posts (topic_id, title, content, created_by)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO posts (topic_id, title, content, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
 		RETURNING post_id, topic_id, title, content, created_by, created_at, updated_at`
 
 	var post Post
@@ -302,3 +317,36 @@ func (repo *Repository) CreateComment(postID int, content string, createdBy int)
 
 	return &comment, nil
 }
+
+/*
+// UpdateTopic updates an existing topic's title and description
+func (repo *Repository) UpdateTopic(topicID int, title, description string, userID int) (*Topic, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		UPDATE topics
+		SET title = $1, description = $2, updated_at = NOW()
+		WHERE topic_id = $3 AND created_by = $4
+		RETURNING topic_id, title, description, created_by, created_at, updated_at`
+
+	var topic Topic
+	err := repo.DB.QueryRow(
+		ctx,
+		query,
+		title,
+		description,
+		topicID,
+		userID,
+	).Scan(
+		&topic.TopicID,
+		&topic.Title,
+		&topic.Description,
+		&topic.CreatedBy,
+		&topic.CreatedAt,
+		&topic.UpdatedAt,
+	)
+
+}
+
+*/

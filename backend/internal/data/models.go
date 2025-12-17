@@ -10,6 +10,7 @@ type User struct {
 	Username     string    `json:"username" db:"username"`
 	PasswordHash string    `json:"-" db:"password_hash"` // Exclude from JSON output for security
 	CreatedAt    time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt    time.Time `json:"updatedAt" db:"updated_at"`
 }
 
 // Topic struct
@@ -19,6 +20,7 @@ type Topic struct {
 	Description string    `json:"description" db:"description"`
 	CreatedBy   int       `json:"createdBy" db:"created_by"`
 	CreatedAt   time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt   time.Time `json:"updatedAt" db:"updated_at"`
 }
 
 // Post struct

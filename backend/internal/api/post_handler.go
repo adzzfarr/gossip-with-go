@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/adzzfarr/gossip-with-go/backend/internal/service"
 
@@ -56,7 +57,7 @@ type CreatePostRequest struct {
 // CreatePost handles POST requests for creating new posts
 func (handler *PostHandler) CreatePost(ctx *gin.Context) {
 	// Get authenticated user's ID from context (set by AuthMiddleware)
-	userID, exists := ctx.Get("UserID")
+	userID, exists := ctx.Get("userID")
 
 	if !exists {
 		ctx.JSON(
@@ -97,7 +98,29 @@ func (handler *PostHandler) CreatePost(ctx *gin.Context) {
 	)
 
 	if err != nil {
-		// Log error, send ISE status to client
+		errMsg := err.Error()
+
+		// Check for validation errors
+		if strings.Contains(errMsg, "cannot be empty") ||
+			strings.Contains(errMsg, "exceeds maximum length") {
+			ctx.JSON(
+				http.StatusBadRequest,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Foreign key constraint failure (topicID does not exist)
+		if strings.Contains(errMsg, "foreign key constraint") ||
+			strings.Contains(errMsg, "foreign key") {
+			ctx.JSON(
+				http.StatusBadRequest,
+				gin.H{"error": "Topic does not exist"},
+			)
+			return
+		}
+
+		// Otherwise, send ISE status to client
 		ctx.JSON(
 			http.StatusInternalServerError,
 			gin.H{"error": "Failed to create post"},
