@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// PostHandler handles HTTP requests related to Posts
+// PostHandler handles HTTP requests related to posts
 type PostHandler struct {
 	PostService *service.PostService
 }
@@ -37,7 +37,7 @@ func (handler *PostHandler) GetPostsByTopicID(ctx *gin.Context) {
 	posts, err := handler.PostService.GetPostsByTopicID((topicID))
 
 	if err != nil {
-		// Log error, send ISE status to client
+		// Send ISE status to client
 		ctx.JSON(
 			http.StatusInternalServerError,
 			gin.H{"error": "Failed to fetch posts for the topic"})
@@ -80,7 +80,6 @@ func (handler *PostHandler) CreatePost(ctx *gin.Context) {
 
 	// Parse request body JSON into CreatePostRequest struct
 	var req CreatePostRequest
-
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(
 			http.StatusBadRequest,
@@ -100,7 +99,7 @@ func (handler *PostHandler) CreatePost(ctx *gin.Context) {
 	if err != nil {
 		errMsg := err.Error()
 
-		// Check for validation errors
+		// Check for validation errors (Bad Request 400)
 		if strings.Contains(errMsg, "cannot be empty") ||
 			strings.Contains(errMsg, "exceeds maximum length") {
 			ctx.JSON(
@@ -110,7 +109,7 @@ func (handler *PostHandler) CreatePost(ctx *gin.Context) {
 			return
 		}
 
-		// Foreign key constraint failure (topicID does not exist)
+		// Foreign key constraint failure (i.e. topicID does not exist)
 		if strings.Contains(errMsg, "foreign key constraint") ||
 			strings.Contains(errMsg, "foreign key") {
 			ctx.JSON(
@@ -164,7 +163,6 @@ func (handler *PostHandler) UpdatePost(ctx *gin.Context) {
 
 	// Parse request body JSON into UpdatePostRequest struct
 	var req UpdatePostRequest
-
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(
 			http.StatusBadRequest,

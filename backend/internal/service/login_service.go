@@ -7,9 +7,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// LoginService handles business logic related to Login
+// LoginService handles business logic related to login via the repository layer
 type LoginService struct {
-	// Dependency injection of Repository into service layer
 	Repo *data.Repository
 }
 

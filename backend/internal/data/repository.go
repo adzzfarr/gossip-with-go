@@ -15,23 +15,19 @@ type Repository struct {
 
 // NewRepository initializes a new instance of Repository struct
 func NewRepository(db *pgxpool.Pool) *Repository {
-	// Return pointer to Repository struct with DB field set to provided connection pool
 	return &Repository{DB: db}
 }
 
 // GetAllTopics fetches all topics from the database
 func (repo *Repository) GetAllTopics() ([]*Topic, error) {
-	// Context and Deferred Cancel
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensures context is cleaned up when function returns
 
-	// SQL Query
 	query := `
         SELECT topic_id, title, description, created_by, created_at, updated_at
         FROM topics
         ORDER BY created_at DESC`
 
-	// Execute Query
 	rows, err := repo.DB.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query all topics failed: %w", err)
@@ -43,7 +39,7 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 	for rows.Next() {
 		var t Topic
 
-		// Scan column values from current row into fields of the Topic struct
+		// Scan column values from current row into fields of the Topic struct (must match SELECT order)
 		err := rows.Scan(
 			&t.TopicID,
 			&t.Title,
@@ -52,6 +48,7 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 			&t.CreatedAt,
 			&t.UpdatedAt,
 		)
+
 		if err != nil {
 			return nil, fmt.Errorf("error scanning topic row: %w", err)
 		}
@@ -67,7 +64,7 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 }
 
 // GetUserByUsername fetches user by their unique username
-// Used to check if a user exists (during registration) and to retrieve credentials (during login).
+// Used to check if a user exists (during registration) and to retrieve credentials (during login)
 func (repo *Repository) GetUserByUsername(username string) (*User, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -98,7 +95,7 @@ func (repo *Repository) GetUserByUsername(username string) (*User, error) {
 }
 
 // CreateUser inserts a new user record into the database
-// NOTE: The password MUST already be hashed before this function is called (handled by service layer)
+// NOTE: Password MUST already be hashed (in service layer) before this function is called
 func (repo *Repository) CreateUser(user *User) (*User, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -127,7 +124,7 @@ func (repo *Repository) CreateUser(user *User) (*User, error) {
 }
 
 // CreateTopic inserts a new topic into the database
-func (repo *Repository) CreateTopic(title, description string, createdBy int) (*Topic, error) {
+func (repo *Repository) CreateTopic(title, description string, userID int) (*Topic, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -144,7 +141,7 @@ func (repo *Repository) CreateTopic(title, description string, createdBy int) (*
 		query,
 		title,
 		description,
-		createdBy,
+		userID,
 	).Scan(
 		&topic.TopicID,
 		&topic.Title,
@@ -182,7 +179,7 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 	for rows.Next() {
 		var post Post
 
-		err := rows.Scan( // Match order in SELECT statement
+		err := rows.Scan(
 			&post.PostID,
 			&post.TopicID,
 			&post.Title,
@@ -227,7 +224,7 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 	for rows.Next() {
 		var comment Comment
 
-		err := rows.Scan( // Match order in SELECT statement
+		err := rows.Scan(
 			&comment.CommentID,
 			&comment.PostID,
 			&comment.Content,
@@ -251,7 +248,7 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 }
 
 // CreatePost inserts a new post into the database
-func (repo *Repository) CreatePost(topicID int, title, content string, createdBy int) (*Post, error) {
+func (repo *Repository) CreatePost(topicID int, title, content string, userID int) (*Post, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -267,7 +264,7 @@ func (repo *Repository) CreatePost(topicID int, title, content string, createdBy
 		topicID,
 		title,
 		content,
-		createdBy,
+		userID,
 	).Scan(
 		&post.PostID,
 		&post.TopicID,
@@ -286,7 +283,7 @@ func (repo *Repository) CreatePost(topicID int, title, content string, createdBy
 }
 
 // CreateComment inserts a new comment into the database
-func (repo *Repository) CreateComment(postID int, content string, createdBy int) (*Comment, error) {
+func (repo *Repository) CreateComment(postID int, content string, userID int) (*Comment, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -301,7 +298,7 @@ func (repo *Repository) CreateComment(postID int, content string, createdBy int)
 		query,
 		postID,
 		content,
-		createdBy,
+		userID,
 	).Scan(
 		&comment.CommentID,
 		&comment.PostID,
@@ -341,6 +338,7 @@ func (repo *Repository) UpdateTopic(topicID int, title, description string, user
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("topic with ID %d not found", topicID)
 		}
+
 		return nil, fmt.Errorf("failed to verify topic ownership: %w", err)
 	}
 
@@ -349,7 +347,6 @@ func (repo *Repository) UpdateTopic(topicID int, title, description string, user
 	}
 
 	// Update topic
-
 	query := `
 		UPDATE topics
 		SET title = $1, description = $2, updated_at = NOW()
@@ -403,6 +400,7 @@ func (repo *Repository) UpdatePost(postID int, title, content string, userID int
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("post with ID %d not found", postID)
 		}
+
 		return nil, fmt.Errorf("failed to verify post ownership: %w", err)
 	}
 
@@ -440,4 +438,65 @@ func (repo *Repository) UpdatePost(postID int, title, content string, userID int
 	}
 
 	return &updatedPost, nil
+}
+
+// UpdateComment updates an existing comment's content
+func (repo *Repository) UpdateComment(commentID int, content string, userID int) (*Comment, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Verify that comment exists and was created by the user
+	var creatorID int
+
+	checkQuery := `
+		SELECT created_by
+		FROM comments
+		WHERE comment_id = $1`
+
+	err := repo.DB.QueryRow(
+		ctx,
+		checkQuery,
+		commentID,
+	).Scan(&creatorID)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("comment with ID %d not found", commentID)
+		}
+
+		return nil, fmt.Errorf("failed to verify comment ownership: %w", err)
+	}
+
+	if creatorID != userID {
+		return nil, fmt.Errorf("user %d is not authorized to update comment %d", userID, commentID)
+	}
+
+	// Update comment
+	query := `
+		UPDATE comments
+		SET content = $1, updated_at = NOW()
+		WHERE comment_id = $2 AND created_by = $3
+		RETURNING comment_id, post_id, content, created_by, created_at, updated_at`
+
+	var updatedComment Comment
+	err = repo.DB.QueryRow(
+		ctx,
+		query,
+		content,
+		commentID,
+		userID,
+	).Scan(
+		&updatedComment.CommentID,
+		&updatedComment.PostID,
+		&updatedComment.Content,
+		&updatedComment.CreatedBy,
+		&updatedComment.CreatedAt,
+		&updatedComment.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update comment: %w", err)
+	}
+
+	return &updatedComment, nil
 }

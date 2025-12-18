@@ -2,13 +2,13 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/adzzfarr/gossip-with-go/backend/internal/data"
 )
 
-// CommentService handles business logic related to Comments
+// CommentService handles business logic related to comments via the repository layer
 type CommentService struct {
-	// Dependency injection of Repository into service layer
 	Repo *data.Repository
 }
 
@@ -39,9 +39,9 @@ func (commentService *CommentService) GetCommentsByPostID(postID int) ([]*data.C
 }
 
 // CreateComment creates a new comment on a post
-func (commentService *CommentService) CreateComment(postID int, content string, createdBy int) (*data.Comment, error) {
+func (commentService *CommentService) CreateComment(postID int, content string, userID int) (*data.Comment, error) {
 	// Content Validation
-	if content == "" {
+	if strings.TrimSpace(content) == "" {
 		return nil, fmt.Errorf("content cannot be empty")
 	}
 	if len(content) > 2000 {
@@ -49,10 +49,34 @@ func (commentService *CommentService) CreateComment(postID int, content string, 
 	}
 
 	// Create comment
-	createdComment, err := commentService.Repo.CreateComment(postID, content, createdBy)
+	createdComment, err := commentService.Repo.CreateComment(postID, content, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create comment: %w", err)
 	}
 
 	return createdComment, nil
+}
+
+// UpdateComment updates an existing comment
+func (commentService *CommentService) UpdateComment(commentID int, content string, userID int) (*data.Comment, error) {
+	// Content Validation
+	if strings.TrimSpace(content) == "" {
+		return nil, fmt.Errorf("content cannot be empty")
+	}
+	if len(content) > 2000 {
+		return nil, fmt.Errorf("content exceeds maximum length of 2000 characters")
+	}
+
+	// UserID Validation
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user ID: %d", userID)
+	}
+
+	// Delegate call to repository layer
+	updatedComment, err := commentService.Repo.UpdateComment(commentID, content, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update comment: %w", err)
+	}
+
+	return updatedComment, nil
 }

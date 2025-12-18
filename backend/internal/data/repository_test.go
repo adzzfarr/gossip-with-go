@@ -9,7 +9,7 @@ import (
 
 // Test database connection and repository function
 func TestGetAllTopicsIntegration(t *testing.T) {
-	// 1. Establish DB Connection and Repository
+	// Establish DB Connection and Repository
 	db, err := OpenDB()
 	if err != nil {
 		t.Fatalf("Failed to connect to DB: %v", err)
@@ -19,8 +19,7 @@ func TestGetAllTopicsIntegration(t *testing.T) {
 	repo := NewRepository(db)
 	ctx := context.Background()
 
-	// 2. Insert Test Data (Simulate new user and a topic)
-	// Need to create user first due to user_id foreign key constraint on the 'topics' table
+	// Create Test User
 	var userID int
 	userSQL := "INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING user_id"
 	err = db.QueryRow(ctx, userSQL, "testuser", "hashed-pass-123").Scan(&userID)
@@ -29,14 +28,14 @@ func TestGetAllTopicsIntegration(t *testing.T) {
 	}
 	t.Logf("Inserted test user with ID: %d", userID)
 
-	// Insert topic using userID
+	// Create Test Topic
 	topicSQL := "INSERT INTO topics (title, description, created_by, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())"
 	_, err = db.Exec(ctx, topicSQL, "Test Topic Title", "Test Description", userID)
 	if err != nil {
 		t.Fatalf("Failed to insert test topic: %v", err)
 	}
 
-	// 3. Test Repository Function
+	// Test Repository Function
 	topics, err := repo.GetAllTopics()
 	if err != nil {
 		t.Errorf("GetAllTopics failed with error: %v", err)
@@ -46,7 +45,7 @@ func TestGetAllTopicsIntegration(t *testing.T) {
 		t.Fatalf("Expected at least 1 topic, but got 0")
 	}
 
-	// Find our test topic
+	// Find test topic
 	var foundTopic *Topic
 	for i := range topics {
 		if topics[i].Title == "Test Topic Title" {
@@ -73,23 +72,19 @@ func TestGetAllTopicsIntegration(t *testing.T) {
 
 	t.Log("Repository function successfully executed and data verified.")
 
-	// 5. Delete Test Data
-	// Delete topic first due to user_id foreign key constraint
+	// Cleanup
 	_, err = db.Exec(ctx, "DELETE FROM topics WHERE created_by = $1", userID)
 	if err != nil {
 		t.Fatalf("Failed to delete test topics: %v", err)
 	}
 
-	// Delete user
 	_, err = db.Exec(ctx, "DELETE FROM users WHERE user_id = $1", userID)
 	if err != nil {
 		t.Fatalf("Failed to delete test user: %v", err)
 	}
 }
 
-// TestRegisterUser tests user registration
 func TestRegisterUser(t *testing.T) {
-	// Setup
 	db, err := OpenDB()
 	if err != nil {
 		t.Fatalf("Failed to connect to DB: %v", err)
@@ -102,15 +97,13 @@ func TestRegisterUser(t *testing.T) {
 	testUsername := "test_register_user"
 	testPasswordHash := "hashed_password_123"
 
-	// Cleanup before test
-	_, _ = db.Exec(ctx, "DELETE FROM users WHERE username = $1", testUsername)
-
-	// Cleanup after test
+	// Cleanup
 	defer func() {
 		_, _ = db.Exec(ctx, "DELETE FROM users WHERE username = $1", testUsername)
 	}()
 
-	t.Run("successful registration", func(t *testing.T) {
+	// 1. Successful registration
+	t.Run("TestSuccessfulRegistration", func(t *testing.T) {
 		user, err := repo.CreateUser(&User{
 			Username:     testUsername,
 			PasswordHash: testPasswordHash,
@@ -136,8 +129,8 @@ func TestRegisterUser(t *testing.T) {
 		}
 	})
 
-	// Test: Duplicate username should fail
-	t.Run("duplicate username", func(t *testing.T) {
+	// 2. Duplicate username
+	t.Run("TestDuplicateUsername", func(t *testing.T) {
 		_, err := repo.CreateUser(&User{
 			Username:     testUsername,
 			PasswordHash: "another_hash",
@@ -148,9 +141,7 @@ func TestRegisterUser(t *testing.T) {
 	})
 }
 
-// TestGetUserByUsername tests retrieving a user by username
 func TestGetUserByUsername(t *testing.T) {
-	// Setup
 	db, err := OpenDB()
 	if err != nil {
 		t.Fatalf("Failed to connect to DB: %v", err)
@@ -163,9 +154,7 @@ func TestGetUserByUsername(t *testing.T) {
 	testUsername := "test_get_user"
 	testPasswordHash := "hashed_password_456"
 
-	// Cleanup and insert test user
-	_, _ = db.Exec(ctx, "DELETE FROM users WHERE username = $1", testUsername)
-
+	// Create test user
 	var userID int
 	err = db.QueryRow(
 		ctx,
@@ -177,13 +166,13 @@ func TestGetUserByUsername(t *testing.T) {
 		t.Fatalf("Failed to insert test user: %v", err)
 	}
 
-	// Cleanup after test
+	// Cleanup
 	defer func() {
 		_, _ = db.Exec(ctx, "DELETE FROM users WHERE user_id = $1", userID)
 	}()
 
-	// Test: Successfully retrieve existing user
-	t.Run("retrieve existing user", func(t *testing.T) {
+	// 1. Retrieve existing user
+	t.Run("TestRetrieveExistingUser", func(t *testing.T) {
 		user, err := repo.GetUserByUsername(testUsername)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -203,8 +192,8 @@ func TestGetUserByUsername(t *testing.T) {
 		}
 	})
 
-	// Test: Non-existent user should return error
-	t.Run("non-existent user", func(t *testing.T) {
+	// 2. Retrieve non-existent user
+	t.Run("TestRetrieveNonExistentUser", func(t *testing.T) {
 		_, err := repo.GetUserByUsername("nonexistent_user_12345")
 		if err == nil {
 			t.Error("expected error for non-existent user, got nil")
@@ -212,7 +201,6 @@ func TestGetUserByUsername(t *testing.T) {
 	})
 }
 
-// TestCreateTopic tests topic creation
 func TestCreateTopic(t *testing.T) {
 	// Setup
 	db, err := OpenDB()
@@ -237,14 +225,14 @@ func TestCreateTopic(t *testing.T) {
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 
-	// Cleanup after test
+	// Cleanup
 	defer func() {
 		_, _ = db.Exec(ctx, "DELETE FROM topics WHERE created_by = $1", userID)
 		_, _ = db.Exec(ctx, "DELETE FROM users WHERE user_id = $1", userID)
 	}()
 
-	// Test: Successful topic creation
-	t.Run("successful topic creation", func(t *testing.T) {
+	// 1. Successful topic creation
+	t.Run("TestSuccessfulTopicCreation", func(t *testing.T) {
 		topic, err := repo.CreateTopic("Test Topic", "Test Description", userID)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -271,9 +259,7 @@ func TestCreateTopic(t *testing.T) {
 	})
 }
 
-// TestCreatePost tests post creation
 func TestCreatePost(t *testing.T) {
-	// Setup
 	db, err := OpenDB()
 	if err != nil {
 		t.Fatalf("Failed to connect to DB: %v", err)
@@ -309,15 +295,15 @@ func TestCreatePost(t *testing.T) {
 		t.Fatalf("Failed to create test topic: %v", err)
 	}
 
-	// Cleanup after test
+	// Cleanup
 	defer func() {
 		_, _ = db.Exec(ctx, "DELETE FROM posts WHERE created_by = $1", userID)
 		_, _ = db.Exec(ctx, "DELETE FROM topics WHERE topic_id = $1", topicID)
 		_, _ = db.Exec(ctx, "DELETE FROM users WHERE user_id = $1", userID)
 	}()
 
-	// Test: Successful post creation
-	t.Run("successful post creation", func(t *testing.T) {
+	// 1. Successful post creation
+	t.Run("TestSuccessfulPostCreation", func(t *testing.T) {
 		post, err := repo.CreatePost(topicID, "Test Post", "Test Content", userID)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -347,9 +333,7 @@ func TestCreatePost(t *testing.T) {
 	})
 }
 
-// TestGetPostsByTopicID tests retrieving posts by topic ID
 func TestGetPostsByTopicID(t *testing.T) {
-	// Setup
 	db, err := OpenDB()
 	if err != nil {
 		t.Fatalf("Failed to connect to DB: %v", err)
@@ -399,15 +383,15 @@ func TestGetPostsByTopicID(t *testing.T) {
 		t.Fatalf("Failed to create test post: %v", err)
 	}
 
-	// Cleanup after test
+	// Cleanup
 	defer func() {
 		_, _ = db.Exec(ctx, "DELETE FROM posts WHERE post_id = $1", postID)
 		_, _ = db.Exec(ctx, "DELETE FROM topics WHERE topic_id = $1", topicID)
 		_, _ = db.Exec(ctx, "DELETE FROM users WHERE user_id = $1", userID)
 	}()
 
-	// Test: Successfully retrieve posts
-	t.Run("retrieve posts by topic", func(t *testing.T) {
+	// 1. Successful retrieval of posts
+	t.Run("TestSuccessfulRetrievalOfPosts", func(t *testing.T) {
 		posts, err := repo.GetPostsByTopicID(topicID)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -436,8 +420,8 @@ func TestGetPostsByTopicID(t *testing.T) {
 		}
 	})
 
-	// Test: Non-existent topic
-	t.Run("non-existent topic", func(t *testing.T) {
+	// 2. Non-existent topic
+	t.Run("TestNonExistentTopic", func(t *testing.T) {
 		posts, err := repo.GetPostsByTopicID(999999)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -448,9 +432,7 @@ func TestGetPostsByTopicID(t *testing.T) {
 	})
 }
 
-// TestCreateComment tests comment creation
 func TestCreateComment(t *testing.T) {
-	// Setup
 	db, err := OpenDB()
 	if err != nil {
 		t.Fatalf("Failed to connect to DB: %v", err)
@@ -500,7 +482,7 @@ func TestCreateComment(t *testing.T) {
 		t.Fatalf("Failed to create test post: %v", err)
 	}
 
-	// Cleanup after test
+	// Cleanup
 	defer func() {
 		_, _ = db.Exec(ctx, "DELETE FROM comments WHERE created_by = $1", userID)
 		_, _ = db.Exec(ctx, "DELETE FROM posts WHERE post_id = $1", postID)
@@ -508,8 +490,8 @@ func TestCreateComment(t *testing.T) {
 		_, _ = db.Exec(ctx, "DELETE FROM users WHERE user_id = $1", userID)
 	}()
 
-	// Test: Successful comment creation
-	t.Run("successful comment creation", func(t *testing.T) {
+	// 1. Successful comment creation
+	t.Run("TestSuccessfulCommentCreation", func(t *testing.T) {
 		comment, err := repo.CreateComment(postID, "Test Comment", userID)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -536,9 +518,7 @@ func TestCreateComment(t *testing.T) {
 	})
 }
 
-// TestGetCommentsByPostID tests retrieving comments by post ID
 func TestGetCommentsByPostID(t *testing.T) {
-	// Setup
 	db, err := OpenDB()
 	if err != nil {
 		t.Fatalf("Failed to connect to DB: %v", err)
@@ -601,7 +581,7 @@ func TestGetCommentsByPostID(t *testing.T) {
 		t.Fatalf("Failed to create test comment: %v", err)
 	}
 
-	// Cleanup after test
+	// Cleanup
 	defer func() {
 		_, _ = db.Exec(ctx, "DELETE FROM comments WHERE comment_id = $1", commentID)
 		_, _ = db.Exec(ctx, "DELETE FROM posts WHERE post_id = $1", postID)
@@ -609,8 +589,8 @@ func TestGetCommentsByPostID(t *testing.T) {
 		_, _ = db.Exec(ctx, "DELETE FROM users WHERE user_id = $1", userID)
 	}()
 
-	// Test: Successfully retrieve comments
-	t.Run("retrieve comments by post", func(t *testing.T) {
+	// 1. Successful retrieval of comments
+	t.Run("TestSuccessfulRetrievalOfComments", func(t *testing.T) {
 		comments, err := repo.GetCommentsByPostID(postID)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
@@ -639,8 +619,8 @@ func TestGetCommentsByPostID(t *testing.T) {
 		}
 	})
 
-	// Test: Non-existent post
-	t.Run("non-existent post", func(t *testing.T) {
+	// 2. Non-existent post
+	t.Run("TestNonExistentPost", func(t *testing.T) {
 		comments, err := repo.GetCommentsByPostID(999999)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)

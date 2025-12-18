@@ -7,9 +7,8 @@ import (
 	"github.com/adzzfarr/gossip-with-go/backend/internal/data"
 )
 
-// TopicService handles business logic related to Topics
+// TopicService handles business logic related to Topics via the repository layer
 type TopicService struct {
-	// Dependency injection of Repository into service layer
 	Repo *data.Repository
 }
 
@@ -18,14 +17,13 @@ func NewTopicService(repo *data.Repository) *TopicService {
 	return &TopicService{Repo: repo}
 }
 
-// GetAllTopics retrieves all topics using the repository layer
+// GetAllTopics retrieves all topics
 func (topicService *TopicService) GetAllTopics() ([]*data.Topic, error) {
-	// Delegate call to repository layer
 	return topicService.Repo.GetAllTopics()
 }
 
 // CreateTopic creates a new topic
-func (topicService *TopicService) CreateTopic(title, description string, createdBy int) (*data.Topic, error) {
+func (topicService *TopicService) CreateTopic(title, description string, userID int) (*data.Topic, error) {
 	// Title Validation
 	if title == "" {
 		return nil, fmt.Errorf("title cannot be empty")
@@ -45,12 +43,12 @@ func (topicService *TopicService) CreateTopic(title, description string, created
 	}
 
 	// UserID Validation
-	if createdBy <= 0 {
-		return nil, fmt.Errorf("invalid user ID: %d", createdBy)
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user ID: %d", userID)
 	}
 
 	// Delegate call to repository layer
-	topic, err := topicService.Repo.CreateTopic(title, description, createdBy)
+	topic, err := topicService.Repo.CreateTopic(title, description, userID)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create topic: %w", err)

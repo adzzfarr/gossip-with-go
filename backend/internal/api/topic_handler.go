@@ -25,7 +25,7 @@ func (handler *TopicHandler) GetAllTopics(ctx *gin.Context) {
 	topics, err := handler.TopicService.GetAllTopics()
 
 	if err != nil {
-		// Log error, send ISE status to client
+		// Send ISE status to client
 		ctx.JSON(
 			http.StatusInternalServerError,
 			gin.H{"error": "Failed to fetch topics"})
@@ -46,7 +46,6 @@ type CreateTopicRequest struct {
 func (handler *TopicHandler) CreateTopic(ctx *gin.Context) {
 	// Get authenticated user's ID from context (set by AuthMiddleware)
 	userID, exists := ctx.Get("userID")
-
 	if !exists {
 		ctx.JSON(
 			http.StatusUnauthorized,
@@ -73,7 +72,6 @@ func (handler *TopicHandler) CreateTopic(ctx *gin.Context) {
 	)
 
 	if err != nil {
-		// Log error, send bad request status to client (if validation fails)
 		ctx.JSON(
 			http.StatusBadRequest,
 			gin.H{"error": err.Error()},

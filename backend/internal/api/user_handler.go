@@ -9,8 +9,8 @@ import (
 
 // UserRegistrationRequest defines expected JSON input for new users
 type UserRegistrationRequest struct {
-	Username string `json:"username" binding:"required"` // returns 400 error if missing
-	Password string `json:"password" binding:"required"` // returns 400 error if missing
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 // UserHandler holds UserService instance to perform business logic
@@ -25,9 +25,8 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 
 // RegisterUser handles POST requests for user registration
 func (handler *UserHandler) RegisterUser(ctx *gin.Context) {
+	// Parse request body JSON into UserRegistrationRequest struct format
 	var req UserRegistrationRequest
-
-	// Try to parse request body JSON into UserRegistrationRequest struct format
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(
 			http.StatusBadRequest,

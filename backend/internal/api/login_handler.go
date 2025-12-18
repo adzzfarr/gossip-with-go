@@ -22,7 +22,7 @@ func NewLoginHandler(loginService *service.LoginService, jwtService *service.JWT
 	}
 }
 
-// LoginRequest struct
+// LoginRequest defines expected JSON input for user login
 type LoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
@@ -30,9 +30,8 @@ type LoginRequest struct {
 
 // LoginUser handles POST requests for user login
 func (handler *LoginHandler) LoginUser(ctx *gin.Context) {
+	// Parse request body JSON into LoginRequest struct format
 	var req LoginRequest
-
-	// Try to parse request body JSON into LoginRequest struct format
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(
 			http.StatusBadRequest,
@@ -40,7 +39,7 @@ func (handler *LoginHandler) LoginUser(ctx *gin.Context) {
 		return
 	}
 
-	// Call service ayer to authenticate user
+	// Call service layer to authenticate user
 	user, err := handler.LoginService.Login(req.Username, req.Password)
 
 	if err != nil {

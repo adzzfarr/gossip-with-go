@@ -7,9 +7,8 @@ import (
 	"github.com/adzzfarr/gossip-with-go/backend/internal/data"
 )
 
-// PostService handles business logic related to Posts
+// PostService handles business logic related to posts via the repository layer
 type PostService struct {
-	// Dependency injection of Repository into service layer
 	Repo *data.Repository
 }
 
@@ -20,7 +19,7 @@ func NewPostService(repo *data.Repository) *PostService {
 
 // GetPostsByTopicID retrieves all posts for a given topic ID using the repository layer
 func (service *PostService) GetPostsByTopicID(topicID int) ([]*data.Post, error) {
-	// Validate topicID
+	// TopicID Validation
 	if topicID <= 0 {
 		return nil, fmt.Errorf("invalid topic ID: %d", topicID)
 	}
@@ -40,7 +39,7 @@ func (service *PostService) GetPostsByTopicID(topicID int) ([]*data.Post, error)
 }
 
 // CreatePost creates a new post
-func (postService *PostService) CreatePost(topicID int, title, content string, createdBy int) (*data.Post, error) {
+func (postService *PostService) CreatePost(topicID int, title, content string, userID int) (*data.Post, error) {
 	// TopicID Validation
 	if topicID <= 0 {
 		return nil, fmt.Errorf("invalid topic ID: %d", topicID)
@@ -63,12 +62,12 @@ func (postService *PostService) CreatePost(topicID int, title, content string, c
 	}
 
 	// UserID Validation
-	if createdBy <= 0 {
-		return nil, fmt.Errorf("invalid user ID: %d", createdBy)
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user ID: %d", userID)
 	}
 
 	// Delegate call to repository layer
-	post, err := postService.Repo.CreatePost(topicID, title, content, createdBy)
+	post, err := postService.Repo.CreatePost(topicID, title, content, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create post: %w", err)
 	}

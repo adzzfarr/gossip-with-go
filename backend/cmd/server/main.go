@@ -23,7 +23,7 @@ func main() {
 
 	log.Println("Database connection pool successfully created.")
 
-	// Initialise Layers (Dependency Injection)
+	// Initialise Layers
 	// Flow: main -> Repository -> Service -> Handler
 	repo := data.NewRepository(dbPool)
 
@@ -77,6 +77,7 @@ func main() {
 			protected.POST("/topics/:topicID/posts", postHandler.CreatePost)
 			protected.PUT("/posts/:postID", postHandler.UpdatePost)
 			protected.POST("/posts/:postID/comments", commentHandler.CreateComment)
+			protected.PUT("/comments/:commentID", commentHandler.UpdateComment)
 		}
 	}
 

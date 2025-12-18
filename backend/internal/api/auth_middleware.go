@@ -24,7 +24,6 @@ func AuthMiddleware(jwtService *service.JWTService) gin.HandlerFunc {
 			return
 		}
 
-		// Try to
 		// Expected format: "Bearer <token>"
 		var tokenString string
 		_, err := fmt.Sscanf(authHeader, "Bearer %s", &tokenString)
@@ -50,7 +49,7 @@ func AuthMiddleware(jwtService *service.JWTService) gin.HandlerFunc {
 			return
 		}
 
-		// Store claims in context for further handlers
+		// Store claims in context for other handlers
 		ctx.Set("userID", claims.UserID)
 		ctx.Set("username", claims.Username)
 

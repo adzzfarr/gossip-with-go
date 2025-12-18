@@ -14,14 +14,16 @@ import (
 
 var (
 	// (?=.*[a-z]) requires at least one lowercase letter
-	// (?=.*[A-Z]) requires at least one uppercase letter
-	// (?=.*\d) requires at least one digit
 	lowercaseRegex = regexp.MustCompile(`[a-z]`)
+
+	// (?=.*[A-Z]) requires at least one uppercase letter
 	uppercaseRegex = regexp.MustCompile(`[A-Z]`)
-	digitRegex     = regexp.MustCompile(`\d`)
+
+	// (?=.*\d) requires at least one digit
+	digitRegex = regexp.MustCompile(`\d`)
 )
 
-// UserService handles business logic related to Users, including hashing of passwords
+// UserService handles business logic related to Users (*** including hashing of passwords ***) via the repository layer
 type UserService struct {
 	Repo *data.Repository
 }
@@ -48,7 +50,7 @@ func (service *UserService) RegisterUser(username, password string) (*data.User,
 		return nil, fmt.Errorf("password must contain at least one digit")
 	}
 
-	// Check if username already exists using GetUserByUsername (in repository.go)
+	// Check if username already exists
 	existingUser, err := service.Repo.GetUserByUsername(username)
 
 	if err != nil {
@@ -76,15 +78,11 @@ func (service *UserService) RegisterUser(username, password string) (*data.User,
 		PasswordHash: string(hashedPassword),
 	}
 
-	// Delegate to the Repository
+	// Delegate to the repository layer
 	if _, err := service.Repo.CreateUser(user); err != nil {
-		// Need to check if error is due to a unique constraint violation
-		// (i.e. username already taken) for clarity and error translation
-
-		// Try to cast the generic Go error into the specific pgconn.PgError type
 		if pgErr, ok := err.(*pgconn.PgError); ok {
 			if pgErr.Code == "23505" { // unique_violation error code
-				// Translate system error into functional error for the API
+				// unique constraint violation means username is taken
 				if strings.Contains(pgErr.ConstraintName, "username") {
 					return nil, fmt.Errorf("username is already taken")
 				}
