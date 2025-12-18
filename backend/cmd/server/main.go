@@ -64,7 +64,7 @@ func main() {
 		// Public Routes (No Auth Required)
 		v1.GET("/topics", topicHandler.GetAllTopics)
 		v1.POST("/users", userHandler.RegisterUser)
-		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
+		v1.GET("/topics/:topicID/posts", postHandler.GetPostsByTopicID)
 		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
 		v1.POST("/login", loginHandler.LoginUser)
 
@@ -73,7 +73,10 @@ func main() {
 		protected.Use(api.AuthMiddleware(jwtService))
 		{
 			protected.POST("/topics", topicHandler.CreateTopic)
-			protected.POST("/posts", postHandler.CreatePost)
+			protected.PUT("/topics/:topicID", topicHandler.UpdateTopic)
+			protected.POST("/topics/:topicID/posts", postHandler.CreatePost)
+			protected.PUT("/posts/:postID", postHandler.UpdatePost)
+			protected.POST("/posts/:postID/comments", commentHandler.CreateComment)
 		}
 	}
 

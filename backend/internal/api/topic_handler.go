@@ -105,7 +105,7 @@ func (handler *TopicHandler) UpdateTopic(ctx *gin.Context) {
 	}
 
 	// Get topicID from URL parameter
-	topicIDStr := ctx.Param("topicId")
+	topicIDStr := ctx.Param("topicID")
 	topicID, err := strconv.Atoi(topicIDStr)
 
 	if err != nil {

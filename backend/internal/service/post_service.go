@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/adzzfarr/gossip-with-go/backend/internal/data"
 )
@@ -73,4 +74,39 @@ func (postService *PostService) CreatePost(topicID int, title, content string, c
 	}
 
 	return post, nil
+}
+
+// UpdatePost updates an existing post
+func (postService *PostService) UpdatePost(postID int, title, content string, userID int) (*data.Post, error) {
+	// Title Validation
+	if strings.TrimSpace(title) == "" {
+		return nil, fmt.Errorf("title cannot be empty")
+	}
+
+	if len(title) > 200 {
+		return nil, fmt.Errorf("title exceeds maximum length of 200 characters")
+	}
+
+	// Content Validation
+	if strings.TrimSpace(content) == "" {
+		return nil, fmt.Errorf("content cannot be empty")
+	}
+
+	if len(content) > 5000 {
+		return nil, fmt.Errorf("content exceeds maximum length of 5000 characters")
+	}
+
+	// UserID Validation
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user ID: %d", userID)
+	}
+
+	// Delegate call to repository layer
+	updatedPost, err := postService.Repo.UpdatePost(postID, title, content, userID)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update post: %w", err)
+	}
+
+	return updatedPost, nil
 }

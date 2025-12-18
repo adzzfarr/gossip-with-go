@@ -56,10 +56,10 @@ func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 	router := gin.Default()
 	v1 := router.Group("/api/v1")
 	{
-		// Public Routes
+
 		v1.GET("/topics", topicHandler.GetAllTopics)
 		v1.POST("/users", userHandler.RegisterUser)
-		v1.GET("/topics/:topicId/posts", postHandler.GetPostsByTopicID)
+		v1.GET("/topics/:topicID/posts", postHandler.GetPostsByTopicID)
 		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
 		v1.POST("/login", loginHandler.LoginUser)
 
@@ -68,8 +68,9 @@ func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 		protected.Use(AuthMiddleware(jwtService))
 		{
 			protected.POST("/topics", topicHandler.CreateTopic)
-			protected.PUT("/topics/:topicId", topicHandler.UpdateTopic)
-			protected.POST("/topics/:topicId/posts", postHandler.CreatePost)
+			protected.PUT("/topics/:topicID", topicHandler.UpdateTopic)
+			protected.POST("/topics/:topicID/posts", postHandler.CreatePost)
+			protected.PUT("/posts/:postID", postHandler.UpdatePost)
 			protected.POST("/posts/:postID/comments", commentHandler.CreateComment)
 		}
 	}
@@ -338,7 +339,7 @@ func TestGetPostsByTopicID(t *testing.T) {
 
 	defer clearTestData(t, repo, []string{"post_test_user"}, []int{topicID})
 
-	// Execute request (GET /api/v1/topics/:topicId/posts)
+	// Execute request (GET /api/v1/topics/:topicID/posts)
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/topics/%d/posts", topicID), nil)
 	w := httptest.NewRecorder()
 
@@ -1652,6 +1653,314 @@ func TestUpdateTopic(t *testing.T) {
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("Expected status %d for topic update with long title, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestUpdatePost(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test user
+	testUsername := "test_update_post_user"
+	testPassword := "test_update_post_password"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	var userID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		testUsername,
+		string(hashedPassword),
+	).Scan(&userID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Create another user (for unauthorised test)
+	otherUsername := "other_post_user"
+	otherPassword := "other_post_password"
+
+	otherHashedPassword, err := bcrypt.GenerateFromPassword([]byte(otherPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash other user password: %v", err)
+	}
+
+	var otherUserID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		otherUsername,
+		string(otherHashedPassword),
+	).Scan(&otherUserID)
+
+	if err != nil {
+		t.Fatalf("Failed to create other test user: %v", err)
+	}
+
+	// Create test topic
+	var topicID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by)
+		VALUES ($1, $2, $3)
+		RETURNING topic_id`,
+		"Topic for Post Update",
+		"Topic Description",
+		userID,
+	).Scan(&topicID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test topic: %v", err)
+	}
+
+	// Create test post
+	var postID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO posts (topic_id, title, content, created_by)
+		VALUES ($1, $2, $3, $4)
+		RETURNING post_id`,
+		topicID,
+		"Original Post Title",
+		"Original Post Content",
+		userID,
+	).Scan(&postID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test post: %v", err)
+	}
+
+	// Login as post creator to get JWT token
+	loginPayload := map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	}
+
+	jsonLoginPayload, _ := json.Marshal(loginPayload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonLoginPayload))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	var loginResponse map[string]string
+
+	json.Unmarshal(w.Body.Bytes(), &loginResponse)
+	tokenString, exists := loginResponse["token"]
+	if !exists || tokenString == "" {
+		t.Fatal("Login response missing 'token' field")
+	}
+
+	// Login as other user to get JWT token
+	otherLoginPayload := map[string]string{
+		"username": otherUsername,
+		"password": otherPassword,
+	}
+
+	jsonOtherLoginPayload, _ := json.Marshal(otherLoginPayload)
+
+	otherReq := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonOtherLoginPayload))
+	otherReq.Header.Set("Content-Type", "application/json")
+
+	otherW := httptest.NewRecorder()
+
+	router.ServeHTTP(otherW, otherReq)
+
+	var otherLoginResponse map[string]string
+
+	json.Unmarshal(otherW.Body.Bytes(), &otherLoginResponse)
+	otherTokenString, otherExists := otherLoginResponse["token"]
+	if !otherExists || otherTokenString == "" {
+		t.Fatal("Other login response missing 'token' field")
+	}
+
+	// Cleanup
+	defer func() {
+		clearTestData(t, repo, []string{testUsername, otherUsername}, []int{topicID})
+	}()
+
+	// 1. Successful Post Update
+	t.Run("SuccessfulPostUpdate", func(t *testing.T) {
+		updatePayload := map[string]string{
+			"title":   "Updated Post Title",
+			"content": "Updated Post Content",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", postID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected status %d for post update, got %d. Response: %s", http.StatusOK, w.Code, w.Body.String())
+		}
+
+		var response data.Post
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to unmarshal response: %v", err)
+		}
+
+		if response.Title != updatePayload["title"] {
+			t.Errorf("Expected updated post title %s, got %s", updatePayload["title"], response.Title)
+		}
+
+		if response.Content != updatePayload["content"] {
+			t.Errorf("Expected updated post content %s, got %s", updatePayload["content"], response.Content)
+		}
+	})
+
+	// 2. Post Update without Authentication Token
+	t.Run("PostUpdateWithoutAuthenticationToken", func(t *testing.T) {
+		updatePayload := map[string]string{
+			"title":   "Unauthorized Update Title",
+			"content": "Unauthorized Update Content",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", postID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		// No Authorization header
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for unauthorized post update, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Post Update by Non-Owner
+	t.Run("PostUpdateByNonOwner", func(t *testing.T) {
+		updatePayload := map[string]string{
+			"title":   "Non-Owner Update Title",
+			"content": "Non-Owner Update Content",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", postID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+otherTokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("Expected status %d for post update by non-owner, got %d. Response: %s", http.StatusForbidden, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Update Non-Existent Post
+	t.Run("UpdateNonExistentPost", func(t *testing.T) {
+		updatePayload := map[string]string{
+			"title":   "Update Non-Existent Title",
+			"content": "Update Non-Existent Content",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", 9999999), bytes.NewBuffer(jsonUpdatePayload)) // Assuming this post ID does not exist
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("Expected status %d for update of non-existent post, got %d. Response: %s", http.StatusNotFound, w.Code, w.Body.String())
+		}
+	})
+
+	// 5. Post Update with Missing Title
+	t.Run("PostUpdateWithMissingTitle", func(t *testing.T) {
+		updatePayload := map[string]string{
+			// Missing title
+			"content": "Update with Missing Title Content",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", postID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for post update with missing title, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 6. Post Update with Title Exceeding Max Length
+	t.Run("PostUpdateWithTitleExceedingMaxLength", func(t *testing.T) {
+		longTitle := ""
+		for i := 0; i < 201; i++ { // Max length is 200 characters
+			longTitle += "a"
+		}
+
+		updatePayload := map[string]string{
+			"title":   longTitle,
+			"content": "Update with Long Title Content",
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", postID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for post update with long title, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+
+	// 7. Post Update with Content Exceeding Max Length
+	t.Run("PostUpdateWithContentExceedingMaxLength", func(t *testing.T) {
+		longContent := ""
+		for i := 0; i < 5001; i++ { // Max length is 5000 characters
+			longContent += "a"
+		}
+
+		updatePayload := map[string]string{
+			"title":   "Update With Long Content Title",
+			"content": longContent,
+		}
+		jsonUpdatePayload, _ := json.Marshal(updatePayload)
+
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", postID), bytes.NewBuffer(jsonUpdatePayload))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for post update with long content, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
 		}
 	})
 }

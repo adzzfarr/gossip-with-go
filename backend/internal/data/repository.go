@@ -379,3 +379,65 @@ func (repo *Repository) UpdateTopic(topicID int, title, description string, user
 
 	return &updatedTopic, nil
 }
+
+// UpdatePost updates an existing post's title and content
+func (repo *Repository) UpdatePost(postID int, title, content string, userID int) (*Post, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Verify that post exists and was created by the user
+	var creatorID int
+
+	checkQuery := `
+		SELECT created_by
+		FROM posts
+		WHERE post_id = $1`
+
+	err := repo.DB.QueryRow(
+		ctx,
+		checkQuery,
+		postID,
+	).Scan(&creatorID)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("post with ID %d not found", postID)
+		}
+		return nil, fmt.Errorf("failed to verify post ownership: %w", err)
+	}
+
+	if creatorID != userID {
+		return nil, fmt.Errorf("user %d is not authorized to update post %d", userID, postID)
+	}
+
+	// Update post
+	query := `
+		UPDATE posts
+		SET title = $1, content = $2, updated_at = NOW()
+		WHERE post_id = $3 AND created_by = $4
+		RETURNING post_id, topic_id, title, content, created_by, created_at, updated_at`
+
+	var updatedPost Post
+	err = repo.DB.QueryRow(
+		ctx,
+		query,
+		title,
+		content,
+		postID,
+		userID,
+	).Scan(
+		&updatedPost.PostID,
+		&updatedPost.TopicID,
+		&updatedPost.Title,
+		&updatedPost.Content,
+		&updatedPost.CreatedBy,
+		&updatedPost.CreatedAt,
+		&updatedPost.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update post: %w", err)
+	}
+
+	return &updatedPost, nil
+}

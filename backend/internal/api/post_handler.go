@@ -23,7 +23,7 @@ func NewPostHandler(postService *service.PostService) *PostHandler {
 // GetPostsByTopicID handles GET requests for posts in a specific topic
 func (handler *PostHandler) GetPostsByTopicID(ctx *gin.Context) {
 	// Get topicID from URL parameter
-	topicIDStr := ctx.Param("topicId")
+	topicIDStr := ctx.Param("topicID")
 	topicID, err := strconv.Atoi(topicIDStr)
 
 	if err != nil {
@@ -68,7 +68,7 @@ func (handler *PostHandler) CreatePost(ctx *gin.Context) {
 	}
 
 	// Get topicID from URL parameter
-	topicIDStr := ctx.Param("topicId")
+	topicIDStr := ctx.Param("topicID")
 	topicID, err := strconv.Atoi(topicIDStr)
 
 	if err != nil {
@@ -130,4 +130,96 @@ func (handler *PostHandler) CreatePost(ctx *gin.Context) {
 
 	// Gin serializes post object into JSON
 	ctx.JSON(http.StatusCreated, post)
+}
+
+// UpdatePostRequest defines expected JSON input for updating posts
+type UpdatePostRequest struct {
+	Title   string `json:"title" binding:"required"`
+	Content string `json:"content" binding:"required"`
+}
+
+// UpdatePost handles PUT requests for updating existing posts
+func (handler *PostHandler) UpdatePost(ctx *gin.Context) {
+	// Get authenticated user's ID from context (set by AuthMiddleware)
+	userID, exists := ctx.Get("userID")
+
+	if !exists {
+		ctx.JSON(
+			http.StatusUnauthorized,
+			gin.H{"error": "Unauthorized"},
+		)
+		return
+	}
+
+	// Get postID from URL parameter
+	postIDStr := ctx.Param("postID")
+	postID, err := strconv.Atoi(postIDStr)
+
+	if err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid post ID"})
+		return
+	}
+
+	// Parse request body JSON into UpdatePostRequest struct
+	var req UpdatePostRequest
+
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid input format or missing fields"},
+		)
+		return
+	}
+
+	// Call service layer to update post
+	updatedPost, err := handler.PostService.UpdatePost(
+		postID,
+		req.Title,
+		req.Content,
+		userID.(int),
+	)
+
+	if err != nil {
+		errMsg := err.Error()
+
+		// Check for not found errors (Not Found 404)
+		if strings.Contains(errMsg, "not found") {
+			ctx.JSON(
+				http.StatusNotFound,
+				gin.H{"error": "Post not found"},
+			)
+			return
+		}
+
+		// Check for authorization errors (Forbidden 403)
+		if strings.Contains(errMsg, "not authorized") {
+			ctx.JSON(
+				http.StatusForbidden,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Check for validation errors (Bad Request 400)
+		if strings.Contains(errMsg, "cannot be empty") ||
+			strings.Contains(errMsg, "exceeds maximum length") {
+			ctx.JSON(
+				http.StatusBadRequest,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Otherwise, send ISE status to client
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": "Failed to update post"},
+		)
+		return
+	}
+
+	// Gin serializes updatedPost object into JSON
+	ctx.JSON(http.StatusOK, updatedPost)
 }
