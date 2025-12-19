@@ -265,6 +265,6 @@ func (handler *CommentHandler) DeleteComment(ctx *gin.Context) {
 		return
 	}
 
-	// Return no content status if successful
+	// Return No Content status on successful deletion
 	ctx.Status(http.StatusNoContent)
 }

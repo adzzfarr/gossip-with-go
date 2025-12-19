@@ -221,3 +221,71 @@ func (handler *PostHandler) UpdatePost(ctx *gin.Context) {
 	// Gin serializes updatedPost object into JSON
 	ctx.JSON(http.StatusOK, updatedPost)
 }
+
+// DeletePost handles DELETE requests for deleting existing posts
+func (handler *PostHandler) DeletePost(ctx *gin.Context) {
+	// Get authenticated user's ID from context (set by AuthMiddleware)
+	userID, exists := ctx.Get("userID")
+	if !exists {
+		ctx.JSON(
+			http.StatusUnauthorized,
+			gin.H{"error": "Unauthorized"},
+		)
+		return
+	}
+
+	// Get postID from URL parameter
+	postIDStr := ctx.Param("postID")
+	postID, err := strconv.Atoi(postIDStr)
+	if err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid post ID"},
+		)
+		return
+	}
+
+	// Call service layer to delete post
+	err = handler.PostService.DeletePost(postID, userID.(int))
+	if err != nil {
+		errMsg := err.Error()
+
+		// Check for not found errors (Not Found 404)
+		if strings.Contains(errMsg, "not found") {
+			ctx.JSON(
+				http.StatusNotFound,
+				gin.H{"error": "Post not found"},
+			)
+			return
+		}
+
+		// Check for authorization errors (Forbidden 403)
+		if strings.Contains(errMsg, "not authorized") {
+			ctx.JSON(
+				http.StatusForbidden,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Check for validation errors (Bad Request 400)
+		if strings.Contains(errMsg, "invalid user ID") ||
+			strings.Contains(errMsg, "invalid post ID") {
+			ctx.JSON(
+				http.StatusBadRequest,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Otherwise, send ISE error to client
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": "Failed to delete post"},
+		)
+		return
+	}
+
+	// Return No Content status on successful deletion
+	ctx.Status(http.StatusNoContent)
+}

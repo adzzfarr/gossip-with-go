@@ -109,3 +109,24 @@ func (postService *PostService) UpdatePost(postID int, title, content string, us
 
 	return updatedPost, nil
 }
+
+// DeletePost deletes an existing post
+func (postService *PostService) DeletePost(postID, userID int) error {
+	// UserID Validation
+	if userID <= 0 {
+		return fmt.Errorf("invalid user ID: %d", userID)
+	}
+
+	// PostID Validation
+	if postID <= 0 {
+		return fmt.Errorf("invalid post ID: %d", postID)
+	}
+
+	// Delegate call to repository layer
+	err := postService.Repo.DeletePost(postID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete post: %w", err)
+	}
+
+	return nil
+}

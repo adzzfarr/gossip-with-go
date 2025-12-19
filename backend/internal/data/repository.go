@@ -554,3 +554,53 @@ func (repo *Repository) DeleteComment(commentID, userID int) error {
 
 	return nil
 }
+
+// DeletePost deletes an existing post and its comments
+func (repo *Repository) DeletePost(postID, userID int) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Verify that post exists and was created by the user
+	var creatorID int
+
+	checkQuery := `
+		SELECT created_by
+		FROM posts
+		WHERE post_id = $1`
+
+	err := repo.DB.QueryRow(
+		ctx,
+		checkQuery,
+		postID,
+	).Scan(&creatorID)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("post with ID %d not found", postID)
+		}
+
+		return fmt.Errorf("failed to verify post ownership: %w", err)
+	}
+
+	if creatorID != userID {
+		return fmt.Errorf("user %d is not authorized to delete post %d", userID, postID)
+	}
+
+	// Delete post (comments deleted automatically via CASCADE)
+	query := `
+		DELETE FROM posts
+		WHERE post_id = $1 AND created_by = $2`
+
+	_, err = repo.DB.Exec(
+		ctx,
+		query,
+		postID,
+		userID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete post: %w", err)
+	}
+
+	return nil
+}

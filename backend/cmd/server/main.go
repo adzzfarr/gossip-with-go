@@ -76,6 +76,7 @@ func main() {
 			protected.PUT("/topics/:topicID", topicHandler.UpdateTopic)
 			protected.POST("/topics/:topicID/posts", postHandler.CreatePost)
 			protected.PUT("/posts/:postID", postHandler.UpdatePost)
+			protected.DELETE("/posts/:postID", postHandler.DeletePost)
 			protected.POST("/posts/:postID/comments", commentHandler.CreateComment)
 			protected.PUT("/comments/:commentID", commentHandler.UpdateComment)
 			protected.DELETE("/comments/:commentID", commentHandler.DeleteComment)
