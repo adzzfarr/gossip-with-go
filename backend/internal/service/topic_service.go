@@ -96,3 +96,24 @@ func (topicService *TopicService) UpdateTopic(topicID int, title, description st
 
 	return updatedTopic, nil
 }
+
+// DeleteTopic deletes an existing topic
+func (topicService *TopicService) DeleteTopic(topicID, userID int) error {
+	// UserID Validation
+	if userID <= 0 {
+		return fmt.Errorf("invalid user ID: %d", userID)
+	}
+
+	// TopicID Validation
+	if topicID <= 0 {
+		return fmt.Errorf("invalid topic ID: %d", topicID)
+	}
+
+	// Delegate call to repository layer
+	err := topicService.Repo.DeleteTopic(topicID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete topic: %w", err)
+	}
+
+	return nil
+}

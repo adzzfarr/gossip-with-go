@@ -69,9 +69,12 @@ func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 		{
 			protected.POST("/topics", topicHandler.CreateTopic)
 			protected.PUT("/topics/:topicID", topicHandler.UpdateTopic)
+			protected.DELETE("/topics/:topicID", topicHandler.DeleteTopic)
+
 			protected.POST("/topics/:topicID/posts", postHandler.CreatePost)
 			protected.PUT("/posts/:postID", postHandler.UpdatePost)
 			protected.DELETE("/posts/:postID", postHandler.DeletePost)
+
 			protected.POST("/posts/:postID/comments", commentHandler.CreateComment)
 			protected.PUT("/comments/:commentID", commentHandler.UpdateComment)
 			protected.DELETE("/comments/:commentID", commentHandler.DeleteComment)
@@ -2822,6 +2825,327 @@ func TestDeletePost(t *testing.T) {
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("Expected status %d for post deletion with invalid post ID, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestDeleteTopic(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test user
+	testUsername := "test_delete_topic_user"
+	testPassword := "test_delete_topic_password"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	var userID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		testUsername,
+		string(hashedPassword),
+	).Scan(&userID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Create another user (for unauthorised test)
+	otherUsername := "other_delete_topic_user"
+	otherPassword := "other_delete_topic_password"
+
+	otherHashedPassword, err := bcrypt.GenerateFromPassword([]byte(otherPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash other user password: %v", err)
+	}
+
+	var otherUserID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		otherUsername,
+		string(otherHashedPassword),
+	).Scan(&otherUserID)
+
+	if err != nil {
+		t.Fatalf("Failed to create other test user: %v", err)
+	}
+
+	// Login as topic creator to get JWT token
+	loginPayload := map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	}
+
+	jsonLoginPayload, _ := json.Marshal(loginPayload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonLoginPayload))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	var loginResponse map[string]string
+
+	json.Unmarshal(w.Body.Bytes(), &loginResponse)
+	tokenString, exists := loginResponse["token"]
+	if !exists || tokenString == "" {
+		t.Fatal("Login response missing 'token' field")
+	}
+
+	// Login as other user to get JWT token
+	otherLoginPayload := map[string]string{
+		"username": otherUsername,
+		"password": otherPassword,
+	}
+
+	jsonOtherLoginPayload, _ := json.Marshal(otherLoginPayload)
+
+	otherReq := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonOtherLoginPayload))
+	otherReq.Header.Set("Content-Type", "application/json")
+
+	otherW := httptest.NewRecorder()
+
+	router.ServeHTTP(otherW, otherReq)
+
+	var otherLoginResponse map[string]string
+
+	json.Unmarshal(otherW.Body.Bytes(), &otherLoginResponse)
+	otherTokenString, otherExists := otherLoginResponse["token"]
+	if !otherExists || otherTokenString == "" {
+		t.Fatal("Other login response missing 'token' field")
+	}
+
+	// Store topicIDs for cleanup
+	topicIDs := []int{}
+
+	// Cleanup
+	defer func() {
+		clearTestData(t, repo, []string{testUsername, otherUsername}, topicIDs)
+	}()
+
+	// 1. Successful Topic Deletion
+	t.Run("SuccessfulTopicDeletion", func(t *testing.T) {
+		// Create test topic
+		var topicID int
+		err = repo.DB.QueryRow(
+			ctx,
+			`INSERT INTO topics (title, description, created_by)
+			VALUES ($1, $2, $3)
+			RETURNING topic_id`,
+			"Topic to be Deleted",
+			"Topic Description",
+			userID,
+		).Scan(&topicID)
+
+		if err != nil {
+			t.Fatalf("Failed to create test topic: %v", err)
+		}
+
+		// Create test posts and comments under the topic
+		for i := 0; i < 2; i++ {
+			var postID int
+			err = repo.DB.QueryRow(
+				ctx,
+				`INSERT INTO posts (topic_id, title, content, created_by)
+				VALUES ($1, $2, $3, $4)
+				RETURNING post_id`,
+				topicID,
+				fmt.Sprintf("Post %d for Deletion Test", i+1),
+				"Post Content",
+				userID,
+			).Scan(&postID)
+
+			if err != nil {
+				t.Fatalf("Failed to create test post %d: %v", i+1, err)
+			}
+
+			for j := 0; j < 2; j++ {
+				_, err = repo.DB.Exec(
+					ctx,
+					`INSERT INTO comments (post_id, content, created_by)
+					VALUES ($1, $2, $3)`,
+					postID,
+					fmt.Sprintf("Comment %d for Post %d Deletion Test", j+1, i+1),
+					userID,
+				)
+
+				if err != nil {
+					t.Fatalf("Failed to create test comment %d for post %d: %v", j+1, i+1, err)
+				}
+			}
+		}
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/topics/%d", topicID), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("Expected status %d for topic deletion, got %d. Response: %s", http.StatusNoContent, w.Code, w.Body.String())
+		}
+
+		// Verify topic was deleted
+		var topicCount int
+		err = repo.DB.QueryRow(
+			ctx,
+			`SELECT COUNT(*) 
+			FROM topics
+			WHERE topic_id = $1`,
+			topicID,
+		).Scan(&topicCount)
+
+		if err != nil {
+			t.Fatalf("Failed to verify topic deletion: %v", err)
+		}
+
+		if topicCount != 0 {
+			t.Fatalf("Topic with ID %d was not deleted", topicID)
+		}
+
+		// Verify posts were deleted
+		var postCount int
+		err = repo.DB.QueryRow(
+			ctx,
+			`SELECT COUNT(*) 
+			FROM posts
+			WHERE topic_id = $1`,
+			topicID,
+		).Scan(&postCount)
+
+		if err != nil {
+			t.Fatalf("Failed to verify posts deletion: %v", err)
+		}
+
+		if postCount != 0 {
+			t.Fatalf("Posts under topic ID %d were not deleted", topicID)
+		}
+
+		// Verify comments were deleted
+		var commentCount int
+		err = repo.DB.QueryRow(
+			ctx,
+			`SELECT COUNT(*) 
+			FROM comments
+			WHERE post_id IN (SELECT post_id FROM posts WHERE topic_id = $1)`,
+			topicID,
+		).Scan(&commentCount)
+
+		if err != nil {
+			t.Fatalf("Failed to verify comments deletion: %v", err)
+		}
+
+		if commentCount != 0 {
+			t.Fatalf("Comments under topic ID %d were not deleted", topicID)
+		}
+	})
+
+	// 2. Topic Deletion without Authentication Token
+	t.Run("TopicDeletionWithoutAuthenticationToken", func(t *testing.T) {
+		// Create test topic
+		var topicID int
+		err = repo.DB.QueryRow(
+			ctx,
+			`INSERT INTO topics (title, description, created_by)
+			VALUES ($1, $2, $3)
+			RETURNING topic_id`,
+			"Topic for Unauthorized Deletion",
+			"Topic Description",
+			userID,
+		).Scan(&topicID)
+
+		if err != nil {
+			t.Fatalf("Failed to create test topic: %v", err)
+		}
+
+		// Add topicID to cleanup list
+		topicIDs = append(topicIDs, topicID)
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/topics/%d", topicID), nil)
+		// No Authorization header
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for unauthorized topic deletion, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Topic Deletion by Non-Owner
+	t.Run("TopicDeletionByNonOwner", func(t *testing.T) {
+		// Create test topic
+		var topicID int
+		err = repo.DB.QueryRow(
+			ctx,
+			`INSERT INTO topics (title, description, created_by)
+			VALUES ($1, $2, $3)
+			RETURNING topic_id`,
+			"Topic for Non-Owner Deletion",
+			"Topic Description",
+			userID,
+		).Scan(&topicID)
+
+		if err != nil {
+			t.Fatalf("Failed to create test topic: %v", err)
+		}
+
+		// Add topicID to cleanup list
+		topicIDs = append(topicIDs, topicID)
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/topics/%d", topicID), nil)
+		req.Header.Set("Authorization", "Bearer "+otherTokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("Expected status %d for topic deletion by non-owner, got %d. Response: %s", http.StatusForbidden, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Deletion of Non-Existent Topic
+	t.Run("DeletionOfNonExistentTopic", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/topics/%d", 9999999), nil) // Assuming this topic ID does not exist
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("Expected status %d for deletion of non-existent topic, got %d. Response: %s", http.StatusNotFound, w.Code, w.Body.String())
+		}
+	})
+
+	// 5. Topic Deletion with Invalid Topic ID
+	t.Run("TopicDeletionWithInvalidTopicID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/topics/invalid_id", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for topic deletion with invalid topic ID, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
 		}
 	})
 }

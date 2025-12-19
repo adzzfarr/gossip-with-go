@@ -604,3 +604,53 @@ func (repo *Repository) DeletePost(postID, userID int) error {
 
 	return nil
 }
+
+// DeleteTopic deletes an existing topic, including its posts and their comments
+func (repo *Repository) DeleteTopic(topicID, userID int) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Verify that topic exists and was created by the user
+	var creatorID int
+
+	checkQuery := `
+		SELECT created_by
+		FROM topics
+		WHERE topic_id = $1`
+
+	err := repo.DB.QueryRow(
+		ctx,
+		checkQuery,
+		topicID,
+	).Scan(&creatorID)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("topic with ID %d not found", topicID)
+		}
+
+		return fmt.Errorf("failed to verify topic ownership: %w", err)
+	}
+
+	if creatorID != userID {
+		return fmt.Errorf("user %d is not authorized to delete topic %d", userID, topicID)
+	}
+
+	// Delete topic (all posts and their comments delete automatically via CASCADE)
+	query := `
+		DELETE FROM topics
+		WHERE topic_id = $1 AND created_by = $2`
+
+	_, err = repo.DB.Exec(
+		ctx,
+		query,
+		topicID,
+		userID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete topic: %w", err)
+	}
+
+	return nil
+}

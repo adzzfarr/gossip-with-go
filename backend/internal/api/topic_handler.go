@@ -173,3 +173,71 @@ func (handler *TopicHandler) UpdateTopic(ctx *gin.Context) {
 	// Return updated topic
 	ctx.JSON(http.StatusOK, updatedTopic)
 }
+
+// DeleteTopic handles DELETE requests for deleting existing topics
+func (handler *TopicHandler) DeleteTopic(ctx *gin.Context) {
+	// Get authenticated user's ID from context (set by AuthMiddleware)
+	userID, exists := ctx.Get("userID")
+	if !exists {
+		ctx.JSON(
+			http.StatusUnauthorized,
+			gin.H{"error": "Unauthorized"},
+		)
+		return
+	}
+
+	// Get topicID from URL parameter
+	topicIDStr := ctx.Param("topicID")
+	topicID, err := strconv.Atoi(topicIDStr)
+	if err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid topic ID"},
+		)
+		return
+	}
+
+	// Call service layer to delete topic
+	err = handler.TopicService.DeleteTopic(topicID, userID.(int))
+	if err != nil {
+		errMsg := err.Error()
+
+		// Check for not found errors (Not Found 404)
+		if strings.Contains(errMsg, "not found") {
+			ctx.JSON(
+				http.StatusNotFound,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Check for authorization errors (Forbidden 403)
+		if strings.Contains(errMsg, "not authorized") {
+			ctx.JSON(
+				http.StatusForbidden,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Check for validation errors (Bad Request 400)
+		if strings.Contains(errMsg, "invalid user ID") ||
+			strings.Contains(errMsg, "invalid topic ID") {
+			ctx.JSON(
+				http.StatusBadRequest,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Otherwise, send ISE status to client
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": "Failed to delete topic"},
+		)
+		return
+	}
+
+	// Return No Content status on successful deletion
+	ctx.Status(http.StatusNoContent)
+}
