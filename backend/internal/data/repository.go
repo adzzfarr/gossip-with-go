@@ -500,3 +500,57 @@ func (repo *Repository) UpdateComment(commentID int, content string, userID int)
 
 	return &updatedComment, nil
 }
+
+// DeleteComment deletes an existing comment
+func (repo *Repository) DeleteComment(commentID, userID int) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Verify that comment exists and was created by the user
+	var creatorID int
+
+	checkQuery := `
+		SELECT created_by
+		FROM comments
+		WHERE comment_id = $1`
+
+	err := repo.DB.QueryRow(
+		ctx,
+		checkQuery,
+		commentID,
+	).Scan(&creatorID)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("comment with ID %d not found", commentID)
+		}
+
+		return fmt.Errorf("failed to verify comment ownership: %w", err)
+	}
+
+	if creatorID != userID {
+		return fmt.Errorf("user %d is not authorized to delete comment %d", userID, commentID)
+	}
+
+	// Delete comment
+	query := `
+		DELETE FROM comments
+		WHERE comment_id = $1 AND created_by = $2`
+
+	commandTag, err := repo.DB.Exec(
+		ctx,
+		query,
+		commentID,
+		userID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete comment: %w", err)
+	}
+
+	if commandTag.RowsAffected() == 0 {
+		return fmt.Errorf("comment with ID %d not found or not owned by user %d", commentID, userID)
+	}
+
+	return nil
+}

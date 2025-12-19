@@ -200,3 +200,71 @@ func (handler *CommentHandler) UpdateComment(ctx *gin.Context) {
 	// Return updated comment
 	ctx.JSON(http.StatusOK, updatedComment)
 }
+
+// DeleteComment handles DELETE requests for deleting comments
+func (handler *CommentHandler) DeleteComment(ctx *gin.Context) {
+	// Get authenticated user's ID from context (set by AuthMiddleware)
+	userID, exists := ctx.Get("userID")
+	if !exists {
+		ctx.JSON(
+			http.StatusUnauthorized,
+			gin.H{"error": "Unauthorized"},
+		)
+		return
+	}
+
+	// Get commentID from URL parameter
+	commentIDStr := ctx.Param("commentID")
+	commentID, err := strconv.Atoi(commentIDStr)
+	if err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid comment ID"},
+		)
+		return
+	}
+
+	// Call service layer to delete comment
+	err = handler.CommentService.DeleteComment(commentID, userID.(int))
+	if err != nil {
+		errMsg := err.Error()
+
+		// Check for not found errors (Not Found 404)
+		if strings.Contains(errMsg, "not found") {
+			ctx.JSON(
+				http.StatusNotFound,
+				gin.H{"error": "Comment not found"},
+			)
+			return
+		}
+
+		// Check for authorization errors (Forbidden 403)
+		if strings.Contains(errMsg, "not authorized") {
+			ctx.JSON(
+				http.StatusForbidden,
+				gin.H{"error": "Not authorized to delete this comment"},
+			)
+			return
+		}
+
+		// Check for validation errors (Bad Request 400)
+		if strings.Contains(errMsg, "invalid user ID") ||
+			strings.Contains(errMsg, "invalid comment ID") {
+			ctx.JSON(
+				http.StatusBadRequest,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Otherwise, send ISE error to client
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": "Failed to delete comment"},
+		)
+		return
+	}
+
+	// Return no content status if successful
+	ctx.Status(http.StatusNoContent)
+}

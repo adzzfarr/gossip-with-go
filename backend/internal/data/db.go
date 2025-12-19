@@ -10,8 +10,8 @@ import (
 
 // OpenDB returns a connection pool to the PostgreSQL database
 func OpenDB() (*pgxpool.Pool, error) {
-	// 1. Connection parameters (Hardcoded for initial testing)
-	// **In production, these should be sourced from environment variables or a config file**
+	// 1. Connection parameters (Hardcoded)
+	// In production, get from environment variables
 	const (
 		dbHost = "localhost"
 		dbPort = "5432"
@@ -20,19 +20,17 @@ func OpenDB() (*pgxpool.Pool, error) {
 		dbName = "forum_db"
 	)
 
-	// 2. Construct Data Source Name (DSN)
+	// 2. Construct data source name
 	// DSN format for pgx: postgres://username:password@host:port/dbname
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", dbUser, dbPass, dbHost, dbPort, dbName)
 
-	// 3. Create connection pool (empty context for initial connection)
-	// Connection pooling is better than a single connection for handling multiple concurrent requests (e.g. multiple users commenting at the same time)
+	// 3. Create connection pool
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create connection pool: %w", err)
 	}
 
 	// 4. Test  connection
-	// Ping database to ensure credentials and connection are valid
 	err = pool.Ping(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("unable to ping database: %w", err)
@@ -40,6 +38,6 @@ func OpenDB() (*pgxpool.Pool, error) {
 
 	log.Println("Database connection pool successfully created.")
 
-	// Return connection pool pointer and nil error
+	// Return connection pool pointer
 	return pool, nil
 }

@@ -80,3 +80,24 @@ func (commentService *CommentService) UpdateComment(commentID int, content strin
 
 	return updatedComment, nil
 }
+
+// DeleteComment deletes an existing comment
+func (commentService *CommentService) DeleteComment(commentID, userID int) error {
+	// UserID Validation
+	if userID <= 0 {
+		return fmt.Errorf("invalid user ID: %d", userID)
+	}
+
+	// CommentID Validation
+	if commentID <= 0 {
+		return fmt.Errorf("invalid comment ID: %d", commentID)
+	}
+
+	// Delegate call to repository layer
+	err := commentService.Repo.DeleteComment(commentID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete comment: %w", err)
+	}
+
+	return nil
+}

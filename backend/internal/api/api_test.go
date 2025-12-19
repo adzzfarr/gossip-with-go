@@ -73,6 +73,7 @@ func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 			protected.PUT("/posts/:postID", postHandler.UpdatePost)
 			protected.POST("/posts/:postID/comments", commentHandler.CreateComment)
 			protected.PUT("/comments/:commentID", commentHandler.UpdateComment)
+			protected.DELETE("/comments/:commentID", commentHandler.DeleteComment)
 		}
 	}
 
@@ -2250,6 +2251,281 @@ func TestUpdateComment(t *testing.T) {
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("Expected status %d for comment update with long content, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestDeleteComment(t *testing.T) {
+	router, repo := setupRouter(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Create test user
+	testUsername := "test_delete_comment_user"
+	testPassword := "test_delete_comment_password"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	var userID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		testUsername,
+		string(hashedPassword),
+	).Scan(&userID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test user: %v", err)
+	}
+
+	// Create another user (for unauthorised test)
+	otherUsername := "other_delete_comment_user"
+	otherPassword := "other_delete_comment_password"
+
+	otherHashedPassword, err := bcrypt.GenerateFromPassword([]byte(otherPassword), bcrypt.DefaultCost)
+
+	if err != nil {
+		t.Fatalf("Failed to hash other user password: %v", err)
+	}
+
+	var otherUserID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO users (username, password_hash)
+		VALUES ($1, $2)
+		RETURNING user_id`,
+		otherUsername,
+		string(otherHashedPassword),
+	).Scan(&otherUserID)
+
+	if err != nil {
+		t.Fatalf("Failed to create other test user: %v", err)
+	}
+
+	// Create test topic
+	var topicID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO topics (title, description, created_by)
+		VALUES ($1, $2, $3)
+		RETURNING topic_id`,
+		"Topic for Delete Comment",
+		"Topic Description",
+		userID,
+	).Scan(&topicID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test topic: %v", err)
+	}
+
+	// Create test post
+	var postID int
+	err = repo.DB.QueryRow(
+		ctx,
+		`INSERT INTO posts (topic_id, title, content, created_by)
+		VALUES ($1, $2, $3, $4)
+		RETURNING post_id`,
+		topicID,
+		"Post for Delete Comment",
+		"Post Content",
+		userID,
+	).Scan(&postID)
+
+	if err != nil {
+		t.Fatalf("Failed to create test post: %v", err)
+	}
+
+	// Login as comment creator to get JWT token
+	loginPayload := map[string]string{
+		"username": testUsername,
+		"password": testPassword,
+	}
+
+	jsonLoginPayload, _ := json.Marshal(loginPayload)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonLoginPayload))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	var loginResponse map[string]string
+
+	json.Unmarshal(w.Body.Bytes(), &loginResponse)
+	tokenString, exists := loginResponse["token"]
+	if !exists || tokenString == "" {
+		t.Fatal("Login response missing 'token' field")
+	}
+
+	// Login as other user to get JWT token
+	otherLoginPayload := map[string]string{
+		"username": otherUsername,
+		"password": otherPassword,
+	}
+
+	jsonOtherLoginPayload, _ := json.Marshal(otherLoginPayload)
+
+	otherReq := httptest.NewRequest(http.MethodPost, "/api/v1/login", bytes.NewBuffer(jsonOtherLoginPayload))
+	otherReq.Header.Set("Content-Type", "application/json")
+
+	otherW := httptest.NewRecorder()
+
+	router.ServeHTTP(otherW, otherReq)
+
+	var otherLoginResponse map[string]string
+
+	json.Unmarshal(otherW.Body.Bytes(), &otherLoginResponse)
+	otherTokenString, otherExists := otherLoginResponse["token"]
+	if !otherExists || otherTokenString == "" {
+		t.Fatal("Other login response missing 'token' field")
+	}
+
+	// Cleanup
+	defer func() {
+		clearTestData(t, repo, []string{testUsername, otherUsername}, []int{topicID})
+	}()
+
+	// 1. Successful Comment Deletion
+	t.Run("SuccessfulCommentDeletion", func(t *testing.T) {
+		// Create test comment
+		var commentID int
+		err = repo.DB.QueryRow(
+			ctx,
+			`INSERT INTO comments (post_id, content, created_by)
+			VALUES ($1, $2, $3)
+			RETURNING comment_id`,
+			postID,
+			"Comment to be Deleted",
+			userID,
+		).Scan(&commentID)
+
+		if err != nil {
+			t.Fatalf("Failed to create test comment: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/comments/%d", commentID), nil)
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("Expected status %d for comment deletion, got %d. Response: %s", http.StatusNoContent, w.Code, w.Body.String())
+		}
+
+		// Verify comment was deleted
+		var commentCount int
+		err = repo.DB.QueryRow(
+			ctx,
+			`SELECT COUNT(*) 
+			FROM comments
+			WHERE comment_id = $1`,
+			commentID,
+		).Scan(&commentCount)
+
+		if err != nil {
+			t.Fatalf("Failed to verify comment deletion: %v", err)
+		}
+
+		if commentCount != 0 {
+			t.Fatalf("Comment with ID %d was not deleted", commentID)
+		}
+	})
+
+	// 2. Comment Deletion without Authentication Token
+	t.Run("CommentDeletionWithoutAuthenticationToken", func(t *testing.T) {
+		// Create test comment
+		var commentID int
+		err = repo.DB.QueryRow(
+			ctx,
+			`INSERT INTO comments (post_id, content, created_by)
+			VALUES ($1, $2, $3)
+			RETURNING comment_id`,
+			postID,
+			"Comment for Unauthorized Deletion",
+			userID,
+		).Scan(&commentID)
+
+		if err != nil {
+			t.Fatalf("Failed to create test comment: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/comments/%d", commentID), nil)
+		// No Authorization header
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("Expected status %d for unauthorized comment deletion, got %d. Response: %s", http.StatusUnauthorized, w.Code, w.Body.String())
+		}
+	})
+
+	// 3. Comment Deletion by Non-Owner
+	t.Run("CommentDeletionByNonOwner", func(t *testing.T) {
+		// Create test comment
+		var commentID int
+		err = repo.DB.QueryRow(
+			ctx,
+			`INSERT INTO comments (post_id, content, created_by)
+			VALUES ($1, $2, $3)
+			RETURNING comment_id`,
+			postID,
+			"Comment for Non-Owner Deletion",
+			userID,
+		).Scan(&commentID)
+
+		if err != nil {
+			t.Fatalf("Failed to create test comment: %v", err)
+		}
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/comments/%d", commentID), nil)
+		req.Header.Set("Authorization", "Bearer "+otherTokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("Expected status %d for comment deletion by non-owner, got %d. Response: %s", http.StatusForbidden, w.Code, w.Body.String())
+		}
+	})
+
+	// 4. Deletion of Non-Existent Comment
+	t.Run("DeletionOfNonExistentComment", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/comments/%d", 9999999), nil) // Assuming this comment ID does not exist
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("Expected status %d for deletion of non-existent comment, got %d. Response: %s", http.StatusNotFound, w.Code, w.Body.String())
+		}
+	})
+
+	// 5. Comment Deletion with Invalid Comment ID
+	t.Run("CommentDeletionWithInvalidCommentID", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/comments/invalid_id", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d for comment deletion with invalid comment ID, got %d. Response: %s", http.StatusBadRequest, w.Code, w.Body.String())
 		}
 	})
 }
