@@ -23,8 +23,8 @@ func NewCommentHandler(commentService *service.CommentService) *CommentHandler {
 // GetCommentsByPostID handles GET requests for comments on a specific post
 func (handler *CommentHandler) GetCommentsByPostID(ctx *gin.Context) {
 	// Get postID from URL parameter
-	postIdStr := ctx.Param("postID")
-	postID, err := strconv.Atoi(postIdStr)
+	postIDStr := ctx.Param("postID")
+	postID, err := strconv.Atoi(postIDStr)
 
 	if err != nil {
 		ctx.JSON(

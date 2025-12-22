@@ -22,16 +22,16 @@ func NewLoginHandler(loginService *service.LoginService, jwtService *service.JWT
 	}
 }
 
-// LoginRequest defines expected JSON input for user login
-type LoginRequest struct {
+// LoginCredentials defines expected JSON input for user login
+type LoginCredentials struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
 
 // LoginUser handles POST requests for user login
 func (handler *LoginHandler) LoginUser(ctx *gin.Context) {
-	// Parse request body JSON into LoginRequest struct format
-	var req LoginRequest
+	// Parse request body JSON into LoginCredentials struct format
+	var req LoginCredentials
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(
 			http.StatusBadRequest,

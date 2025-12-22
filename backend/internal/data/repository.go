@@ -71,7 +71,7 @@ func (repo *Repository) GetUserByUsername(username string) (*User, error) {
 
 	var user User
 	query := `
-        SELECT user_id, username, password_hash, created_at, updated_at
+    	SELECT user_id, username, password_hash, created_at, updated_at
         FROM users
         WHERE username = $1`
 

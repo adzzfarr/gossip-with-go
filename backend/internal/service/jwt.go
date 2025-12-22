@@ -23,17 +23,17 @@ func NewJWTService(secretKey string, tokenDuration time.Duration) *JWTService {
 
 // JWTClaims struct
 type JWTClaims struct {
-	UserID   int    `json:"user_id"`
+	UserID   int    `json:"userID"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 
 // GenerateToken creates a JWT token for a user
-func (jwtService *JWTService) GenerateToken(userId int, username string) (string, error) {
+func (jwtService *JWTService) GenerateToken(userID int, username string) (string, error) {
 	now := time.Now()
 
 	claims := &JWTClaims{
-		UserID:   userId,   // Private (custom) claim
+		UserID:   userID,   // Private (custom) claim
 		Username: username, // Private (custom) claim
 		RegisteredClaims: jwt.RegisteredClaims{ // Standard claims
 			IssuedAt:  jwt.NewNumericDate(now),

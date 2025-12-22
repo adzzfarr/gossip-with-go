@@ -21,8 +21,16 @@ func TestGetAllTopicsIntegration(t *testing.T) {
 
 	// Create Test User
 	var userID int
-	userSQL := "INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING user_id"
-	err = db.QueryRow(ctx, userSQL, "testuser", "hashed-pass-123").Scan(&userID)
+	userSQL := `
+		INSERT INTO users (username, password_hash, created_at, updated_at) 
+		VALUES ($1, $2, NOW(), NOW()) 
+		RETURNING user_id`
+	err = db.QueryRow(
+		ctx,
+		userSQL,
+		"testuser",
+		"hashed-pass-123",
+	).Scan(&userID)
 	if err != nil {
 		t.Fatalf("Failed to insert test user: %v", err)
 	}
@@ -113,7 +121,7 @@ func TestRegisterUser(t *testing.T) {
 		}
 
 		if user.UserID == 0 {
-			t.Error("expected user_id to be set")
+			t.Error("expected userID to be set")
 		}
 		if user.Username != testUsername {
 			t.Errorf("expected username %s, got %s", testUsername, user.Username)
@@ -151,17 +159,22 @@ func TestGetUserByUsername(t *testing.T) {
 	repo := NewRepository(db)
 	ctx := context.Background()
 
+	// Create test user
 	testUsername := "test_get_user"
 	testPasswordHash := "hashed_password_456"
+	query := `
+		INSERT INTO users (username, password_hash, created_at, updated_at) 
+		VALUES ($1, $2, NOW(), NOW()) 
+		RETURNING user_id`
 
-	// Create test user
 	var userID int
 	err = db.QueryRow(
 		ctx,
-		"INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING user_id",
+		query,
 		testUsername,
 		testPasswordHash,
 	).Scan(&userID)
+
 	if err != nil {
 		t.Fatalf("Failed to insert test user: %v", err)
 	}
@@ -214,10 +227,15 @@ func TestCreateTopic(t *testing.T) {
 
 	// Create test user
 	testUsername := "test_create_topic_user"
+	query := `
+		INSERT INTO users (username, password_hash, created_at, updated_at) 
+		VALUES ($1, $2, NOW(), NOW()) 
+		RETURNING user_id`
+
 	var userID int
 	err = db.QueryRow(
 		ctx,
-		"INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING user_id",
+		query,
 		testUsername,
 		"hash123",
 	).Scan(&userID)
@@ -271,10 +289,15 @@ func TestCreatePost(t *testing.T) {
 
 	// Create test user
 	testUsername := "test_create_post_user"
+	query := `
+		INSERT INTO users (username, password_hash, created_at, updated_at) 
+		VALUES ($1, $2, NOW(), NOW()) 
+		RETURNING user_id`
+
 	var userID int
 	err = db.QueryRow(
 		ctx,
-		"INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING user_id",
+		query,
 		testUsername,
 		"hash123",
 	).Scan(&userID)
@@ -345,10 +368,15 @@ func TestGetPostsByTopicID(t *testing.T) {
 
 	// Create test user
 	testUsername := "test_get_posts_user"
+	query := `
+		INSERT INTO users (username, password_hash, created_at, updated_at) 
+		VALUES ($1, $2, NOW(), NOW()) 
+		RETURNING user_id`
+
 	var userID int
 	err = db.QueryRow(
 		ctx,
-		"INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING user_id",
+		query,
 		testUsername,
 		"hash123",
 	).Scan(&userID)
@@ -444,10 +472,15 @@ func TestCreateComment(t *testing.T) {
 
 	// Create test user
 	testUsername := "test_create_comment_user"
+	query := `
+		INSERT INTO users (username, password_hash, created_at, updated_at) 
+		VALUES ($1, $2, NOW(), NOW()) 
+		RETURNING user_id`
+
 	var userID int
 	err = db.QueryRow(
 		ctx,
-		"INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING user_id",
+		query,
 		testUsername,
 		"hash123",
 	).Scan(&userID)
@@ -530,10 +563,15 @@ func TestGetCommentsByPostID(t *testing.T) {
 
 	// Create test user
 	testUsername := "test_get_comments_user"
+	query := `
+		INSERT INTO users (username, password_hash, created_at, updated_at) 
+		VALUES ($1, $2, NOW(), NOW()) 
+		RETURNING user_id`
+
 	var userID int
 	err = db.QueryRow(
 		ctx,
-		"INSERT INTO users (username, password_hash, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING user_id",
+		query,
 		testUsername,
 		"hash123",
 	).Scan(&userID)
@@ -586,7 +624,7 @@ func TestGetCommentsByPostID(t *testing.T) {
 		_, _ = db.Exec(ctx, "DELETE FROM comments WHERE comment_id = $1", commentID)
 		_, _ = db.Exec(ctx, "DELETE FROM posts WHERE post_id = $1", postID)
 		_, _ = db.Exec(ctx, "DELETE FROM topics WHERE topic_id = $1", topicID)
-		_, _ = db.Exec(ctx, "DELETE FROM users WHERE user_id = $1", userID)
+		_, _ = db.Exec(ctx, "DELETE FROM users WHERE user_id` = $1", userID)
 	}()
 
 	// 1. Successful retrieval of comments
