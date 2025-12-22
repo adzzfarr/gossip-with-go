@@ -36,7 +36,7 @@ export interface Comment {
     updatedAt: string;
 }
 
-// Auth types for login/register responses
+// Auth types for login/register 
 export interface RegisterCredentials {
     username: string;
     password: string;
