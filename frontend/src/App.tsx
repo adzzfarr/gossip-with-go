@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Container, 
@@ -10,13 +10,26 @@ import {
   Stack,
   Divider 
 } from '@mui/material';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import { useAppDispatch, useAppSelector } from './hooks/redux';
+import { logoutUser } from './features/auth/authSlice';
 
 function ThemePreview() {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    dispatch(logoutUser());
+    navigate('/login');
+  }
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack spacing={4}>
         {/* Typography Section */}
         <Box>
+          <Button variant='contained' onClick={handleLogout}>Logout</Button>
           <Typography variant="h1" gutterBottom>
             h1. Gossip with Go
           </Typography>
@@ -228,15 +241,16 @@ function ThemePreview() {
 }
 
 function App() {
+  const { isAuthenticated } = useAppSelector(state => state.auth);
+
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default' }}>
-      <Routes>
-        <Route path="/" element={<ThemePreview />} />
-        <Route path="/login" element={<div>Login Page - Coming Soon</div>} />
-        <Route path="/register" element={<div>Register Page - Coming Soon</div>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Box>
+    <Routes>
+      <Route path='/login' element={<LoginPage />} />
+      <Route path='/register' element={<RegisterPage />} />
+      <Route path='/theme' element={<ThemePreview />} />
+
+      <Route path='/' element={isAuthenticated ? <ThemePreview /> : <LoginPage />}></Route>
+    </Routes>
   );
 }
 
