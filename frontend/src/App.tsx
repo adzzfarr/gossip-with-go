@@ -1,4 +1,4 @@
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { 
   Box, 
   Container, 
@@ -14,6 +14,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { useAppDispatch, useAppSelector } from './hooks/redux';
 import { logoutUser } from './features/auth/authSlice';
+import TopicsPage from './pages/TopicsPage';
 
 function ThemePreview() {
   const dispatch = useAppDispatch();
@@ -248,8 +249,14 @@ function App() {
       <Route path='/login' element={<LoginPage />} />
       <Route path='/register' element={<RegisterPage />} />
       <Route path='/theme' element={<ThemePreview />} />
+      <Route 
+        path='/topics' 
+        element={isAuthenticated ? <TopicsPage /> : <Navigate to="/login" replace/>}>
+      </Route>
 
-      <Route path='/' element={isAuthenticated ? <ThemePreview /> : <LoginPage />}></Route>
+      <Route 
+        path='/' 
+        element={isAuthenticated ? <Navigate to="/topics" replace /> : <Navigate to="/login" replace />}></Route>
     </Routes>
   );
 }
