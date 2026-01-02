@@ -38,6 +38,22 @@ func (service *PostService) GetPostsByTopicID(topicID int) ([]*data.Post, error)
 	return posts, nil
 }
 
+// GetPostByID retrieves a specific post by its ID
+func (postService *PostService) GetPostByID(postID int) (*data.Post, error) {
+	// PostID Validation
+	if postID <= 0 {
+		return nil, fmt.Errorf("invalid post ID: %d", postID)
+	}
+
+	// Delegate call to repository layer
+	post, err := postService.Repo.GetPostByID(postID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get post by ID %d: %w", postID, err)
+	}
+
+	return post, nil
+}
+
 // CreatePost creates a new post
 func (postService *PostService) CreatePost(topicID int, title, content string, userID int) (*data.Post, error) {
 	// TopicID Validation

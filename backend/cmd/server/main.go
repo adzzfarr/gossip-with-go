@@ -75,6 +75,7 @@ func main() {
 		v1.GET("/topics", topicHandler.GetAllTopics)
 		v1.POST("/users", userHandler.RegisterUser)
 		v1.GET("/topics/:topicID/posts", postHandler.GetPostsByTopicID)
+		v1.GET("/posts/:postID", postHandler.GetPostByID)
 		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
 		v1.POST("/login", loginHandler.LoginUser)
 

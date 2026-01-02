@@ -203,6 +203,37 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 	return posts, nil
 }
 
+// GetPostByID fetches a specific post by its ID
+func (repo *Repository) GetPostByID(postID int) (*Post, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var post Post
+	query := `
+		SELECT post_id, topic_id, title, content, created_by, created_at, updated_at
+		FROM posts
+		WHERE post_id = $1`
+
+	err := repo.DB.QueryRow(ctx, query, postID).Scan(
+		&post.PostID,
+		&post.TopicID,
+		&post.Title,
+		&post.Content,
+		&post.CreatedBy,
+		&post.CreatedAt,
+		&post.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("post not found with ID: %d", postID)
+		}
+		return nil, fmt.Errorf("query to find post failed: %w", err)
+	}
+
+	return &post, nil
+}
+
 // GetCommentsByPostID fetches all comments for a given post ID
 func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 	ctx, cancel := context.WithCancel(context.Background())

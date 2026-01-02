@@ -30,6 +30,19 @@ export const fetchPostsByTopic = createAsyncThunk(
     }
 )
 
+// Fetch single post by ID
+export const fetchPostById = createAsyncThunk(
+    'posts/fetchPostById',
+    async (postID: number, { rejectWithValue }) => {
+        try {
+            const response = await apiClient.get<Post>(`/posts/${postID}`);
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to fetch post');
+        }
+    }
+);
+
 const postsSlice = createSlice({
     name: 'posts',
     initialState,
@@ -39,6 +52,7 @@ const postsSlice = createSlice({
         }
     },
     extraReducers: (builder) => {
+        // Fetch posts by topic
         builder.addCase(
             fetchPostsByTopic.pending,
             (state) => {
@@ -57,6 +71,31 @@ const postsSlice = createSlice({
 
         builder.addCase(
             fetchPostsByTopic.rejected,
+            (state, action) => {
+                state.loading = false;
+                state.error = action.payload as string;
+            }
+        )
+
+        // Fetch single post by ID
+        builder.addCase(
+            fetchPostById.pending,
+            (state) => {
+                state.loading = true;
+                state.error = null;
+            }
+        );
+
+        builder.addCase(
+            fetchPostById.fulfilled,
+            (state, action) => {
+                state.loading = false;
+                state.currentPost = action.payload;
+            }
+        );
+
+        builder.addCase(
+            fetchPostById.rejected,
             (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
