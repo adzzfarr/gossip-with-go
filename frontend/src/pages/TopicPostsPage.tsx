@@ -3,7 +3,7 @@ import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect } from "react";
 import { fetchPostsByTopic } from "../features/posts/postsSlice";
 import { Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Container, Typography } from "@mui/material";
-import { ArrowBack } from "@mui/icons-material";
+import { Add, ArrowBack } from "@mui/icons-material";
 
 export default function TopicPostsPage() {
     const { topicID } = useParams<{ topicID: string }>();
@@ -55,24 +55,38 @@ export default function TopicPostsPage() {
             }}
             maxWidth="lg"
         >
-            <Box
-                sx={{
-                    mb: 3,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                }}    
-            >
-                <Button
-                    startIcon={<ArrowBack />}
-                    onClick={() => navigate('/topics')}
-                    variant="outlined"
+            <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 3,
+            }}>
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                    }}    
                 >
-                    Back to Topics
+                    <Button
+                        startIcon={<ArrowBack />}
+                        onClick={() => navigate('/topics')}
+                        variant="outlined"
+                    >
+                        Back to Topics
+                    </Button>
+                    <Typography variant="h4" component="h1">
+                        Posts
+                    </Typography>
+                </Box>
+
+                <Button
+                    startIcon={<Add />}
+                    variant="contained"
+                    onClick={() => navigate(`/topics/${topicID}/create-post`)}
+                >
+                    Create Post 
                 </Button>
-                <Typography variant="h4" component="h1">
-                    Posts
-                </Typography>
             </Box>
 
             {posts.length === 0

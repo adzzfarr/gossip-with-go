@@ -17,6 +17,7 @@ import { logoutUser } from './features/auth/authSlice';
 import TopicsPage from './pages/TopicsPage';
 import TopicPostsPage from './pages/TopicPostsPage';
 import PostPage from './pages/PostPage';
+import CreatePostPage from './pages/CreatePostPage';
 
 function ThemePreview() {
   const dispatch = useAppDispatch();
@@ -258,6 +259,11 @@ function App() {
       <Route 
         path='/topics/:topicID' 
         element={isAuthenticated ? <TopicPostsPage /> : <Navigate to="/login" replace/>} 
+      />
+
+      <Route 
+        path='/topics/:topicID/create-post'
+        element={isAuthenticated ? <CreatePostPage /> : <Navigate to="/login" replace />}
       />
 
       <Route

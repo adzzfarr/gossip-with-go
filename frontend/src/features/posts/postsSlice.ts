@@ -8,6 +8,8 @@ interface PostsState {
     currentPost: Post | null;
     loading: boolean;
     error: string | null;
+    submitting: boolean;
+    submitError: string | null;
 }
 
 const initialState: PostsState = {
@@ -15,6 +17,8 @@ const initialState: PostsState = {
     currentPost: null,
     loading: false,
     error: null,
+    submitting: false,
+    submitError: null,
 }
 
 // Fetch posts by topic
@@ -43,12 +47,33 @@ export const fetchPostById = createAsyncThunk(
     }
 );
 
+// Create a new post
+export const createPost = createAsyncThunk(
+    'posts/createPost',
+    async (
+        { topicID, title, content } : {
+            topicID: number;
+            title: string;
+            content: string;
+        },
+        { rejectWithValue }
+     ) => {
+        try {
+            const response = await apiClient.post<Post>(`/topics/${topicID}/posts`, { title, content });
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to create post');
+        }
+    }
+);
+
 const postsSlice = createSlice({
     name: 'posts',
     initialState,
     reducers: {
         clearError: (state) => {
             state.error = null;
+            state.submitError = null;
         }
     },
     extraReducers: (builder) => {
@@ -101,6 +126,32 @@ const postsSlice = createSlice({
                 state.error = action.payload as string;
             }
         )
+
+        // Create a new post
+        builder.addCase(
+            createPost.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            createPost.fulfilled,
+            (state, action) => {
+                state.submitting = false;
+                // Add new post to the top of posts list
+                state.posts.unshift(action.payload);
+            }
+        );
+
+        builder.addCase(
+            createPost.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
+            }
+        );
     }
 })
 
