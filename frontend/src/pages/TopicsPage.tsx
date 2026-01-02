@@ -17,15 +17,15 @@ export default function TopicsPage() {
         return (
             <Container 
                 sx={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    mt: 4,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '60vh',
                 }}
             >
                 <CircularProgress />
             </Container>
-        )
+        );
     }
 
     if (error) {

@@ -15,6 +15,7 @@ import RegisterPage from './pages/RegisterPage';
 import { useAppDispatch, useAppSelector } from './hooks/redux';
 import { logoutUser } from './features/auth/authSlice';
 import TopicsPage from './pages/TopicsPage';
+import TopicPostsPage from './pages/TopicPostsPage';
 
 function ThemePreview() {
   const dispatch = useAppDispatch();
@@ -251,8 +252,12 @@ function App() {
       <Route path='/theme' element={<ThemePreview />} />
       <Route 
         path='/topics' 
-        element={isAuthenticated ? <TopicsPage /> : <Navigate to="/login" replace/>}>
-      </Route>
+        element={isAuthenticated ? <TopicsPage /> : <Navigate to="/login" replace/>} 
+      />
+      <Route 
+        path='/topics/:topicID' 
+        element={isAuthenticated ? <TopicPostsPage /> : <Navigate to="/login" replace/>} 
+      />
 
       <Route 
         path='/' 
