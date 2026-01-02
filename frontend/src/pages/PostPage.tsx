@@ -1,9 +1,9 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { fetchPostById } from "../features/posts/postsSlice";
-import { fetchCommentsByPostID } from "../features/comments/commentsSlice";
-import { useEffect } from "react";
-import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Divider, Paper, Typography } from "@mui/material";
+import { clearCommentsError, createComment, fetchCommentsByPostID } from "../features/comments/commentsSlice";
+import { useEffect, useState } from "react";
+import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Divider, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 
 export default function PostPage() {
@@ -12,7 +12,9 @@ export default function PostPage() {
     const navigate = useNavigate();
 
     const { currentPost, loading: postLoading, error: postError } = useAppSelector(state => state.posts);
-    const { comments, loading: commentsLoading, error: commentsError } = useAppSelector(state => state.comments);
+    const { comments, loading: commentsLoading, error: commentsError, submitting, submitError } = useAppSelector(state => state.comments);
+
+    const [commentContent, setCommentContent] = useState('');
 
     useEffect(() => {
         if (postID) {
@@ -20,6 +22,31 @@ export default function PostPage() {
             dispatch(fetchCommentsByPostID(parseInt(postID)));
         }
     }, [postID, dispatch]);
+
+    const handleSubmitComment = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!postID || !commentContent.trim()) return;
+
+        const result = await dispatch(
+            createComment({
+                postID: parseInt(postID),
+                content: commentContent.trim(),
+            })
+        );
+
+        if (createComment.fulfilled.match(result)) {
+            // Clear comment input on successful submission
+            setCommentContent('');
+        }
+    }
+
+    const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCommentContent(e.target.value);
+        if (submitError) {
+            dispatch(clearCommentsError());
+        }
+    }
 
     if (postLoading || commentsLoading) {
         return (
@@ -129,6 +156,40 @@ export default function PostPage() {
                 >
                     Comments
                 </Typography>
+
+                {/* Add Comment Form */}
+                <Paper
+                    elevation={1}
+                    sx={{ 
+                        p: 2, 
+                        mb: 3 
+                    }}
+                >
+                    <form onSubmit={handleSubmitComment}>
+                        <TextField
+                            fullWidth
+                            multiline
+                            minRows={3}
+                            placeholder="Write a comment..."
+                            value={commentContent}
+                            onChange={handleCommentChange}
+                            disabled={submitting}
+                            sx={{ mb: 2 }}
+                        />
+                        
+                        {submitError && (
+                            <Alert severity="error" sx={{ mb: 2 }}>{submitError}</Alert>
+                        )}
+
+                        <Button
+                            type="submit"
+                            variant="contained"
+                            disabled={submitting || !commentContent.trim()}
+                        >
+                            {submitting ? <CircularProgress size={24} /> : 'Post Comment'}
+                        </Button>
+                    </form>
+                </Paper>
 
                 {commentsError && (
                     <Alert severity="error" sx={{ mb: 2 }}>
