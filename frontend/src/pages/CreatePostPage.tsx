@@ -4,6 +4,7 @@ import { useState } from "react";
 import { clearError, createPost } from "../features/posts/postsSlice";
 import { Alert, Box, Button, CircularProgress, Container, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
+import ForumBreadcrumbs from "../components/Breadcrumbs";
 
 export default function CreatePostPage() {
     const { topicID } = useParams<{ topicID: string }>();
@@ -56,6 +57,8 @@ export default function CreatePostPage() {
                 mb: 4 
             }}
         >
+            <ForumBreadcrumbs />
+            
             <Button
                 startIcon={<ArrowBack />}
                 onClick={() => navigate(`/topics/${topicID}`)}

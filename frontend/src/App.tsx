@@ -18,6 +18,7 @@ import TopicsPage from './pages/TopicsPage';
 import TopicPostsPage from './pages/TopicPostsPage';
 import PostPage from './pages/PostPage';
 import CreatePostPage from './pages/CreatePostPage';
+import Layout from './components/Layout';
 
 function ThemePreview() {
   const dispatch = useAppDispatch();
@@ -249,28 +250,57 @@ function App() {
 
   return (
     <Routes>
+      {/* Public Routes (No Layout) */}
       <Route path='/login' element={<LoginPage />} />
       <Route path='/register' element={<RegisterPage />} />
       <Route path='/theme' element={<ThemePreview />} />
+
+      {/* Protected Routes (With Layout) */}
       <Route 
         path='/topics' 
-        element={isAuthenticated ? <TopicsPage /> : <Navigate to="/login" replace/>} 
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <TopicsPage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        } 
       />
+
       <Route 
         path='/topics/:topicID' 
-        element={isAuthenticated ? <TopicPostsPage /> : <Navigate to="/login" replace/>} 
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <TopicPostsPage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        } 
       />
 
       <Route 
         path='/topics/:topicID/create-post'
-        element={isAuthenticated ? <CreatePostPage /> : <Navigate to="/login" replace />}
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <CreatePostPage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        }
       />
 
       <Route
         path='/posts/:postID'
-        element={isAuthenticated ? <PostPage /> : <Navigate to="/login" replace />}
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <PostPage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        }
       />
 
+      {/* Default Route */}
       <Route 
         path='/' 
         element={isAuthenticated ? <Navigate to="/topics" replace /> : <Navigate to="/login" replace />} 

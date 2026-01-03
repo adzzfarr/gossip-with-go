@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { fetchPostsByTopic } from "../features/posts/postsSlice";
 import { Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Container, Typography } from "@mui/material";
 import { Add, ArrowBack } from "@mui/icons-material";
+import ForumBreadcrumbs from "../components/Breadcrumbs";
 
 export default function TopicPostsPage() {
     const { topicID } = useParams<{ topicID: string }>();
@@ -55,6 +56,8 @@ export default function TopicPostsPage() {
             }}
             maxWidth="lg"
         >
+            <ForumBreadcrumbs />
+            
             <Box sx={{
                 display: 'flex',
                 alignItems: 'center',

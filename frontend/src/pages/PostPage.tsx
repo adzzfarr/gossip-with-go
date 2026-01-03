@@ -5,6 +5,7 @@ import { clearCommentsError, createComment, fetchCommentsByPostID } from "../fea
 import { useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Divider, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
+import ForumBreadcrumbs from "../components/Breadcrumbs";
 
 export default function PostPage() {
     const { postID } = useParams<{ postID: string}>();
@@ -101,6 +102,8 @@ export default function PostPage() {
                 mb: 4,
             }}
         >
+            <ForumBreadcrumbs />
+            
             <Button
                 startIcon={<ArrowBack />}
                 onClick={() => navigate(-1)}
