@@ -19,6 +19,7 @@ import TopicPostsPage from './pages/TopicPostsPage';
 import PostPage from './pages/PostPage';
 import CreatePostPage from './pages/CreatePostPage';
 import Layout from './components/Layout';
+import EditPostPage from './pages/EditPostPage';
 
 function ThemePreview() {
   const dispatch = useAppDispatch();
@@ -295,6 +296,17 @@ function App() {
           isAuthenticated 
             ? (<Layout>
                 <PostPage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        }
+      />
+
+      <Route
+        path='/posts/:postID/edit'
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <EditPostPage />
               </Layout>) 
             : (<Navigate to="/login" replace />)
         }

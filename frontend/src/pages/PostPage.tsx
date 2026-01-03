@@ -1,10 +1,10 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
-import { fetchPostById } from "../features/posts/postsSlice";
+import { deletePost, fetchPostByID } from "../features/posts/postsSlice";
 import { clearCommentsError, createComment, fetchCommentsByPostID } from "../features/comments/commentsSlice";
 import { useEffect, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Divider, Paper, TextField, Typography } from "@mui/material";
-import { ArrowBack } from "@mui/icons-material";
+import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Paper, TextField, Typography } from "@mui/material";
+import { ArrowBack, Delete, Edit } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 
 export default function PostPage() {
@@ -12,14 +12,19 @@ export default function PostPage() {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
 
-    const { currentPost, loading: postLoading, error: postError } = useAppSelector(state => state.posts);
-    const { comments, loading: commentsLoading, error: commentsError, submitting, submitError } = useAppSelector(state => state.comments);
+    const { currentPost, loading: postLoading, error: postError, submitting: postSubmitting } = useAppSelector(state => state.posts);
+    const { comments, loading: commentsLoading, error: commentsError, submitting: commentSubmitting, submitError: commentSubmitError } = useAppSelector(state => state.comments);
+    const { userID } = useAppSelector(state => state.auth);
+
+    // Check if user is author 
+    const isAuthor = currentPost && currentPost.createdBy === userID;
 
     const [commentContent, setCommentContent] = useState('');
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false); 
 
     useEffect(() => {
         if (postID) {
-            dispatch(fetchPostById(parseInt(postID)));
+            dispatch(fetchPostByID(parseInt(postID)));
             dispatch(fetchCommentsByPostID(parseInt(postID)));
         }
     }, [postID, dispatch]);
@@ -44,9 +49,26 @@ export default function PostPage() {
 
     const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setCommentContent(e.target.value);
-        if (submitError) {
+        if (commentSubmitError) {
             dispatch(clearCommentsError());
         }
+    }
+
+    const handleDeletePost = async () => {
+        if (!postID) return;
+
+        const result = await dispatch(deletePost(parseInt(postID)));
+
+        if (deletePost.fulfilled.match(result)) {
+            if (currentPost?.topicID) {
+                // Redirect to topic posts page after deletion
+                navigate(`/topics/${currentPost.topicID}`);
+            } else {
+                navigate('/topics');
+            }
+        }
+
+        setDeleteDialogOpen(false);
     }
 
     if (postLoading || commentsLoading) {
@@ -103,7 +125,7 @@ export default function PostPage() {
             }}
         >
             <ForumBreadcrumbs />
-            
+
             <Button
                 startIcon={<ArrowBack />}
                 onClick={() => navigate(-1)}
@@ -120,13 +142,52 @@ export default function PostPage() {
                     mb: 4,
                 }}
             >
-                <Typography 
-                    variant="h4" 
-                    component="h1" 
-                    gutterBottom
+                <Box
+                    sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        mb: 2,
+                    }}
                 >
-                    {currentPost.title}
-                </Typography>
+                    <Typography 
+                        variant="h4" 
+                        component="h1" 
+                        gutterBottom
+                    >
+                        {currentPost.title}
+                    </Typography>
+
+                    {/* Edit and Delete Buttons for author */}
+                    {isAuthor && (
+                        <Box 
+                            sx={{
+                                display: 'flex',
+                                gap: 1
+                            }}
+                        >
+                            <Button
+                                startIcon={<Edit />}
+                                variant="outlined"
+                                onClick={() => navigate(`/posts/${currentPost.postID}/edit`)}
+                                size="small"
+                            >
+                                Edit
+                            </Button>
+
+                            <Button
+                                startIcon={<Delete />}
+                                variant="outlined"
+                                color="error"
+                                onClick={() => setDeleteDialogOpen(true)}
+                                disabled={postSubmitting}
+                                size="small"
+                            >
+                                Delete
+                            </Button>
+                        </Box>
+                    )}
+                </Box>
 
                 <Box
                     sx={{
@@ -176,20 +237,20 @@ export default function PostPage() {
                             placeholder="Write a comment..."
                             value={commentContent}
                             onChange={handleCommentChange}
-                            disabled={submitting}
+                            disabled={commentSubmitting}
                             sx={{ mb: 2 }}
                         />
                         
-                        {submitError && (
-                            <Alert severity="error" sx={{ mb: 2 }}>{submitError}</Alert>
+                        {commentSubmitError && (
+                            <Alert severity="error" sx={{ mb: 2 }}>{commentSubmitError}</Alert>
                         )}
 
                         <Button
                             type="submit"
                             variant="contained"
-                            disabled={submitting || !commentContent.trim()}
+                            disabled={commentSubmitting || !commentContent.trim()}
                         >
-                            {submitting ? <CircularProgress size={24} /> : 'Post Comment'}
+                            {commentSubmitting ? <CircularProgress size={24} /> : 'Post Comment'}
                         </Button>
                     </form>
                 </Paper>
@@ -237,6 +298,33 @@ export default function PostPage() {
                     )
                 }
             </Box>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+            >
+                <DialogTitle>Delete Post?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to delete this post? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button 
+                        onClick={() => setDeleteDialogOpen(false)} 
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleDeletePost}
+                        color="error"
+                        disabled={postSubmitting}
+                    >
+                        {postSubmitting ? <CircularProgress size={24} /> : 'Delete'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Container>
     );
 }

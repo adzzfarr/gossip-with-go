@@ -35,8 +35,8 @@ export const fetchPostsByTopic = createAsyncThunk(
 )
 
 // Fetch single post by ID
-export const fetchPostById = createAsyncThunk(
-    'posts/fetchPostById',
+export const fetchPostByID = createAsyncThunk(
+    'posts/fetchPostByID',
     async (postID: number, { rejectWithValue }) => {
         try {
             const response = await apiClient.get<Post>(`/posts/${postID}`);
@@ -47,7 +47,7 @@ export const fetchPostById = createAsyncThunk(
     }
 );
 
-// Create a new post
+// Create new post
 export const createPost = createAsyncThunk(
     'posts/createPost',
     async (
@@ -66,6 +66,39 @@ export const createPost = createAsyncThunk(
         }
     }
 );
+
+// Update post
+export const updatePost = createAsyncThunk(
+    'posts/updatePost',
+    async (
+        { postID, title, content }: { postID: number; title: string; content: string },
+        { rejectWithValue }
+    ) => {
+        try {
+            const response = await apiClient.put<Post>(
+                `/posts/${postID}`,
+                { title, content }
+            )
+
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to update post');
+        }
+    }
+);
+
+// Delete post
+export const deletePost = createAsyncThunk(
+    'posts/deletePost',
+    async (postID: number, { rejectWithValue }) => {
+        try {
+            await apiClient.delete(`/posts/${postID}`);
+            return postID;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to delete post');
+        }
+    }
+)
 
 const postsSlice = createSlice({
     name: 'posts',
@@ -104,7 +137,7 @@ const postsSlice = createSlice({
 
         // Fetch single post by ID
         builder.addCase(
-            fetchPostById.pending,
+            fetchPostByID.pending,
             (state) => {
                 state.loading = true;
                 state.error = null;
@@ -112,7 +145,7 @@ const postsSlice = createSlice({
         );
 
         builder.addCase(
-            fetchPostById.fulfilled,
+            fetchPostByID.fulfilled,
             (state, action) => {
                 state.loading = false;
                 state.currentPost = action.payload;
@@ -120,14 +153,14 @@ const postsSlice = createSlice({
         );
 
         builder.addCase(
-            fetchPostById.rejected,
+            fetchPostByID.rejected,
             (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
             }
         )
 
-        // Create a new post
+        // Create new post
         builder.addCase(
             createPost.pending,
             (state) => {
@@ -147,6 +180,73 @@ const postsSlice = createSlice({
 
         builder.addCase(
             createPost.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
+            }
+        );
+
+        // Update post
+        builder.addCase(
+            updatePost.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            updatePost.fulfilled,
+            (state, action) => {
+                state.submitting = false;
+
+                // Update the post in posts list
+                const index = state.posts.findIndex(post => post.postID === action.payload.postID);
+                if (index !== -1) {
+                    state.posts[index] = action.payload;
+                }
+
+                // Also update currentPost if it matches
+                if (state.currentPost && state.currentPost.postID === action.payload.postID) {
+                    state.currentPost = action.payload;
+                }
+            }
+        );
+
+        builder.addCase(
+            updatePost.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
+            }
+        );
+
+        // Delete post
+        builder.addCase(
+            deletePost.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            deletePost.fulfilled,
+            (state, action) => {
+                state.submitting = false;
+
+                // Remove the deleted post from posts list
+                state.posts = state.posts.filter(post => post.postID !== action.payload);
+
+                // Clear currentPost if it was deleted
+                if (state.currentPost && state.currentPost.postID === action.payload) {
+                    state.currentPost = null;
+                }
+            }
+        );
+
+        builder.addCase(
+            deletePost.rejected,
             (state, action) => {
                 state.submitting = false;
                 state.submitError = action.payload as string;
