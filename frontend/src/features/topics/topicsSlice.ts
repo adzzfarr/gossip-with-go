@@ -5,16 +5,18 @@ import { apiClient } from '../../api/client';
 
 interface TopicsState {
     topics: Topic[];
-    currentTopic: Topic | null;
     loading: boolean;
     error: string | null;
+    submitting: boolean;
+    submitError: string | null;
 }
 
 const initialState: TopicsState = {
     topics: [],
-    currentTopic: null,
     loading: false,
     error: null,
+    submitting: false,
+    submitError: null,
 }
 
 // Fetch topics
@@ -30,12 +32,36 @@ export const fetchTopics = createAsyncThunk(
     }
 )
 
+// Create topic
+export const createTopic = createAsyncThunk(
+    'topics/createTopic',
+    async (
+        { title, description } : {
+            title: string;
+            description: string;
+        },  
+        { rejectWithValue }
+    ) => {
+        try {
+            const response = await apiClient.post<Topic>(
+                '/topics',
+                { title, description }
+            )
+
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to create topic');
+        }
+    }
+);
+
 const topicsSlice = createSlice({
     name: 'topics',
     initialState,
     reducers: {
         clearError: (state) => {
             state.error = null;
+            state.submitError = null;
         },
     },
     extraReducers: (builder) => {
@@ -60,6 +86,31 @@ const topicsSlice = createSlice({
             (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;
+            }
+        );
+
+        // Create topic
+        builder.addCase(
+            createTopic.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            createTopic.fulfilled,
+            (state, action: PayloadAction<Topic>) => {
+                state.submitting = false;
+                state.topics.unshift(action.payload); // Add new topic to the beginning
+            }
+        );
+
+        builder.addCase(
+            createTopic.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
             }
         );
     }

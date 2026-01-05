@@ -20,6 +20,7 @@ import PostPage from './pages/PostPage';
 import CreatePostPage from './pages/CreatePostPage';
 import Layout from './components/Layout';
 import EditPostPage from './pages/EditPostPage';
+import CreateTopicPage from './pages/CreateTopicPage';
 
 function ThemePreview() {
   const dispatch = useAppDispatch();
@@ -266,6 +267,17 @@ function App() {
               </Layout>) 
             : (<Navigate to="/login" replace />)
         } 
+      />
+
+      <Route 
+        path='/topics/create' 
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <CreateTopicPage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        }
       />
 
       <Route 

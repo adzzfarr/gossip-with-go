@@ -2,7 +2,8 @@ import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect } from "react";
 import { fetchTopics } from "../features/topics/topicsSlice";
-import { Alert, Card, CardActionArea, CardContent, CircularProgress, Container, Grid, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Container, Grid, Typography } from "@mui/material";
+import { Add } from "@mui/icons-material";
 
 export default function TopicsPage() {
     const dispatch = useAppDispatch();
@@ -44,13 +45,32 @@ export default function TopicsPage() {
             }}
             maxWidth="lg"
         >
-            <Typography 
-                variant="h3" 
-                component="h1" 
-                gutterBottom
+            <Box
+                sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 3,
+                }}
             >
-                Topics
-            </Typography>
+                <Typography 
+                    variant="h4" 
+                    component="h1" 
+                    gutterBottom
+                >
+                    Discussion Topics
+                </Typography>
+
+                <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => navigate('/topics/create')}
+                >
+                    New Topic
+                </Button>
+            </Box>
+            
+            
 
             {topics.length === 0 
                 ? (<Alert severity="info">No topics available.</Alert>) 
