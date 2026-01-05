@@ -32,7 +32,7 @@ export const fetchCommentsByPostID = createAsyncThunk(
     }
 );
 
-// Create a new comment
+// Create new comment
 export const createComment = createAsyncThunk(
     'comments/createComment',
     async (
@@ -50,6 +50,38 @@ export const createComment = createAsyncThunk(
         }
     }
 );
+
+// Update comment
+export const updateComment = createAsyncThunk(
+    'comments/updateComment',
+    async (
+        { commentID, content } : { commentID: number; content: string },
+        { rejectWithValue }
+    ) => {
+        try {
+            const response = await apiClient.put<Comment>(
+                `/comments/${commentID}`, 
+                { content }
+            );
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to update comment');
+        }
+    }
+);
+
+// Delete comment
+export const deleteComment = createAsyncThunk(
+    'comments/deleteComment',
+    async (commentID: number, { rejectWithValue }) => {
+        try {
+            await apiClient.delete(`/comments/${commentID}`);
+            return commentID;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to delete comment');
+        }
+    }
+)
 
 const commentsSlice = createSlice({
     name: 'comments',
@@ -86,7 +118,7 @@ const commentsSlice = createSlice({
             }
         );
 
-        // Create a new comment
+        // Create new comment
         builder.addCase(
             createComment.pending,
             (state) => {
@@ -105,6 +137,61 @@ const commentsSlice = createSlice({
 
         builder.addCase(
             createComment.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
+            }
+        );
+
+        // Update comment
+        builder.addCase(
+            updateComment.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            updateComment.fulfilled,
+            (state, action) => {
+                state.submitting = false;
+
+                const index = state.comments.findIndex(c => c.commentID === action.payload.commentID);
+                
+                if (index !== -1) {
+                    state.comments[index] = action.payload;
+                } 
+            }
+        );
+
+        builder.addCase(
+            updateComment.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
+            }
+        );
+
+        // Delete comment
+        builder.addCase(
+            deleteComment.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            deleteComment.fulfilled,
+            (state, action) => {
+                state.submitting = false;
+                state.comments = state.comments.filter(comment => comment.commentID !== action.payload);
+            }
+        );
+
+        builder.addCase(
+            deleteComment.rejected,
             (state, action) => {
                 state.submitting = false;
                 state.submitError = action.payload as string;
