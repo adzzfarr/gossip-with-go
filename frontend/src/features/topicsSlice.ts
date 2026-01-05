@@ -1,7 +1,7 @@
 // Redux slice for topics state management
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { Topic } from '../../types';
-import { apiClient } from '../../api/client';
+import type { Topic } from '../types';
+import { apiClient } from '../api/client';
 
 interface TopicsState {
     topics: Topic[];

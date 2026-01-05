@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/adzzfarr/gossip-with-go/backend/internal/service"
 	"github.com/gin-gonic/gin"
@@ -55,4 +56,91 @@ func (handler *UserHandler) RegisterUser(ctx *gin.Context) {
 			"user":    user,
 		},
 	)
+}
+
+// GetUserByID handles GET requests to fetch user profile by userID
+func (handler *UserHandler) GetUserByID(ctx *gin.Context) {
+	// Extract userID from URL parameters
+	userIDStr := ctx.Param("id")
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid user ID"},
+		)
+		return
+	}
+
+	// Call Service Layer
+	user, err := handler.UserService.GetUserByID(userID)
+	if err != nil {
+		if err.Error() == "user not found" {
+			ctx.JSON(
+				http.StatusNotFound,
+				gin.H{"error": "User not found"},
+			)
+			return
+		}
+
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": err.Error()},
+		)
+		return
+	}
+
+	// Serialize user object (excluding PasswordHash) into JSON
+	ctx.JSON(http.StatusOK, user)
+}
+
+// GetUserPosts handles GET requests to fetch all posts by a specific user
+func (handler *UserHandler) GetUserPosts(ctx *gin.Context) {
+	// Extract userID from URL parameters
+	userIDStr := ctx.Param("id")
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid user ID"},
+		)
+		return
+	}
+
+	// Call Service Layer
+	posts, err := handler.UserService.GetUserPosts(userID)
+	if err != nil {
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": err.Error()},
+		)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, posts)
+}
+
+// GetUserComments handles GET requests to fetch all comments by a specific user
+func (handler *UserHandler) GetUserComments(ctx *gin.Context) {
+	// Extract userID from URL parameters
+	userIDStr := ctx.Param("id")
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid user ID"},
+		)
+		return
+	}
+
+	// Call Service Layer
+	comments, err := handler.UserService.GetUserComments(userID)
+	if err != nil {
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": err.Error()},
+		)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, comments)
 }

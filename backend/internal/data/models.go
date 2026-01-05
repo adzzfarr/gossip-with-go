@@ -6,7 +6,7 @@ import "time"
 
 // User struct
 type User struct {
-	UserID       int       `json:"userID" db:"userID"` // Primary key
+	UserID       int       `json:"userID" db:"user_id"` // Primary key
 	Username     string    `json:"username" db:"username"`
 	PasswordHash string    `json:"-" db:"password_hash"` // Exclude from JSON output for security
 	CreatedAt    time.Time `json:"createdAt" db:"created_at"`
@@ -30,6 +30,7 @@ type Post struct {
 	Title     string    `json:"title" db:"title"`
 	Content   string    `json:"content" db:"content"`
 	CreatedBy int       `json:"createdBy" db:"created_by"`
+	Username  string    `json:"username" db:"username"`
 	CreatedAt time.Time `json:"createdAt" db:"created_at"`
 	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
 }
@@ -40,6 +41,7 @@ type Comment struct {
 	PostID    int       `json:"postID" db:"post_id"`       // Foreign key to Post
 	Content   string    `json:"content" db:"content"`
 	CreatedBy int       `json:"createdBy" db:"created_by"`
+	Username  string    `json:"username" db:"username"`
 	CreatedAt time.Time `json:"createdAt" db:"created_at"`
 	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
 }

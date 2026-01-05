@@ -1,8 +1,8 @@
 // Redux slice for authentication state management
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { LoginCredentials, RegisterCredentials } from '../../types';
-import { authAPI } from '../../api/auth';
-import { decodeToken } from '../../api/client';
+import type { LoginCredentials, RegisterCredentials } from '../types';
+import { authAPI } from '../api/auth';
+import { decodeToken } from '../api/client';
 
 interface AuthState {
     isAuthenticated: boolean;

@@ -1,7 +1,7 @@
 // Redux slice for topics state management
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { Post } from '../../types';
-import { apiClient } from '../../api/client';
+import type { Post } from '../types';
+import { apiClient } from '../api/client';
 
 interface PostsState {
     posts: Post[];

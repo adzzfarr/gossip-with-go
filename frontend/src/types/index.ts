@@ -23,6 +23,7 @@ export interface Post {
     title: string;
     content: string;
     createdBy: number;
+    username: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -32,6 +33,7 @@ export interface Comment {
     postID: number;
     content: string;
     createdBy: number;
+    username: string;
     createdAt: string;
     updatedAt: string;
 }

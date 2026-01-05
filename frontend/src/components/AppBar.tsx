@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
-import { logoutUser } from "../features/auth/authSlice";
+import { logoutUser } from "../features/authSlice";
 import { AppBar, Box, Button, Toolbar, Typography } from "@mui/material";
-import { Forum, Logout } from "@mui/icons-material";
+import { Forum, Logout, Person } from "@mui/icons-material";
 
 export default function ForumAppBar() {
     const dispatch = useAppDispatch();
@@ -32,9 +32,15 @@ export default function ForumAppBar() {
 
                 <Box sx={{ flexGrow: 1 }} />
 
-                <Typography variant="body1" sx={{ mr: 2 }}>
+                <Button
+                    color="inherit"
+                    onClick={() => navigate('/profile')}
+                    sx={{ mr: 2 }}
+                    startIcon={<Person />}
+                    size="large"
+                >
                     {username}
-                </Typography>
+                </Button>
 
                 <Button 
                     onClick={handleLogout}

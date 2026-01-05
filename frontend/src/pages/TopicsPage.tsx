@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect } from "react";
-import { fetchTopics } from "../features/topics/topicsSlice";
+import { fetchTopics } from "../features/topicsSlice";
 import { Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Container, Grid, Typography } from "@mui/material";
 import { Add } from "@mui/icons-material";
 

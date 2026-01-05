@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
-import { clearError, loginUser } from "../features/auth/authSlice";
+import { clearError, loginUser } from "../features/authSlice";
 import { Alert, Box, Button, CircularProgress, Container, Link, Paper, TextField, Typography } from "@mui/material";
 
 export default function LoginPage() {

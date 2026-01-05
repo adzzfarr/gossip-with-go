@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
-import { clearError, registerUser } from "../features/auth/authSlice";
+import { clearError, registerUser } from "../features/authSlice";
 import { Alert, Box, Button, CircularProgress, Container, Link, List, ListItem, ListItemIcon, ListItemText, Paper, TextField, Typography } from "@mui/material";
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';

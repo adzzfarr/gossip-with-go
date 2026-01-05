@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect, useState } from "react";
-import { clearError, fetchPostByID, updatePost } from "../features/posts/postsSlice";
+import { clearError, fetchPostByID, updatePost } from "../features/postsSlice";
 import { Alert, Box, Button, CircularProgress, Container, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 

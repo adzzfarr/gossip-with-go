@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import React, { useState } from "react";
-import { clearError, createTopic } from "../features/topics/topicsSlice"
+import { clearError, createTopic } from "../features/topicsSlice"
 import { Alert, Box, Button, CircularProgress, Container, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 

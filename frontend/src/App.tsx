@@ -13,7 +13,7 @@ import {
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { useAppDispatch, useAppSelector } from './hooks/redux';
-import { logoutUser } from './features/auth/authSlice';
+import { logoutUser } from './features/authSlice';
 import TopicsPage from './pages/TopicsPage';
 import TopicPostsPage from './pages/TopicPostsPage';
 import PostPage from './pages/PostPage';
@@ -21,6 +21,7 @@ import CreatePostPage from './pages/CreatePostPage';
 import Layout from './components/Layout';
 import EditPostPage from './pages/EditPostPage';
 import CreateTopicPage from './pages/CreateTopicPage';
+import ProfilePage from './pages/ProfilePage';
 
 function ThemePreview() {
   const dispatch = useAppDispatch();
@@ -258,6 +259,28 @@ function App() {
       <Route path='/theme' element={<ThemePreview />} />
 
       {/* Protected Routes (With Layout) */}
+      <Route 
+        path='/profile'
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <ProfilePage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        }
+      />
+
+      <Route 
+        path='/users/:userID'
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <ProfilePage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        }
+      />
+
       <Route 
         path='/topics' 
         element={

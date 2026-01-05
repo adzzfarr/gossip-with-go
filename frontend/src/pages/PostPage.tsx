@@ -1,8 +1,8 @@
 import type { Comment as CommentType } from "../types/index";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
-import { deletePost, fetchPostByID } from "../features/posts/postsSlice";
-import { clearCommentsError, createComment, deleteComment, fetchCommentsByPostID, updateComment } from "../features/comments/commentsSlice";
+import { deletePost, fetchPostByID } from "../features/postsSlice";
+import { clearCommentsError, createComment, deleteComment, fetchCommentsByPostID, updateComment } from "../features/commentsSlice";
 import { useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack, Delete, Edit } from "@mui/icons-material";
@@ -250,7 +250,7 @@ export default function PostPage() {
                     }}
                 >
                     <Typography variant="body2" color="text.secondary">
-                        By: {currentPost.createdBy || 'Unknown'} 
+                        u/{currentPost.username || 'Unknown'} 
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                         {new Date(currentPost.createdAt).toLocaleString()}
@@ -346,7 +346,7 @@ export default function PostPage() {
                                                     }}
                                                 >
                                                     <Typography variant="body2" fontWeight="bold">
-                                                        {comment.createdBy || 'Unknown'}
+                                                        u/{comment.username || 'Unknown'}
                                                     </Typography>
 
                                                     <Typography variant="body2" color="text.secondary">

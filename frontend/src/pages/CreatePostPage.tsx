@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useState } from "react";
-import { clearError, createPost } from "../features/posts/postsSlice";
+import { clearError, createPost } from "../features/postsSlice";
 import { Alert, Box, Button, CircularProgress, Container, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
@@ -58,7 +58,7 @@ export default function CreatePostPage() {
             }}
         >
             <ForumBreadcrumbs />
-            
+
             <Button
                 startIcon={<ArrowBack />}
                 onClick={() => navigate(`/topics/${topicID}`)}

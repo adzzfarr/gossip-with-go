@@ -1,7 +1,7 @@
 // Redux slice for comments state management
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { Comment } from '../../types'; 
-import { apiClient } from '../../api/client';
+import type { Comment } from '../types'; 
+import { apiClient } from '../api/client';
 
 interface CommentsState {
     comments: Comment[];

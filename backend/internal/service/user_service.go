@@ -97,3 +97,51 @@ func (service *UserService) RegisterUser(username, password string) (*data.User,
 	user.PasswordHash = ""
 	return user, nil
 }
+
+// GetUserByID retrieves a user by their ID
+func (service *UserService) GetUserByID(userID int) (*data.User, error) {
+	// UserID Validation
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user ID: %d", userID)
+	}
+
+	// Delegate call to repository layer
+	user, err := service.Repo.GetUserByID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by ID %d: %w", userID, err)
+	}
+
+	return user, nil
+}
+
+// GetUserPosts retrieves all posts created by a specific user
+func (service *UserService) GetUserPosts(userID int) ([]*data.Post, error) {
+	// UserID Validation
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user ID: %d", userID)
+	}
+
+	// Delegate call to repository layer
+	posts, err := service.Repo.GetUserPosts(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get posts for user ID %d: %w", userID, err)
+	}
+
+	return posts, nil
+}
+
+// GetUserComments retrieves all comments made by a specific user
+func (service *UserService) GetUserComments(userID int) ([]*data.Comment, error) {
+	// UserID Validation
+	if userID <= 0 {
+		return nil, fmt.Errorf("invalid user ID: %d", userID)
+	}
+
+	// Delegate call to repository layer
+	comments, err := service.Repo.GetUserComments(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get comments for user ID %d: %w", userID, err)
+	}
+
+	return comments, nil
+}

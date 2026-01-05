@@ -164,9 +164,10 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 	defer cancel()
 
 	query := `
-		SELECT post_id, topic_id, title, content, created_by, created_at, updated_at
-		FROM posts
-		WHERE topic_id = $1
+		SELECT p.post_id, p.topic_id, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
+		FROM posts p
+		JOIN users u ON p.created_by = u.user_id
+		WHERE p.topic_id = $1
 		ORDER BY created_at DESC`
 
 	rows, err := repo.DB.Query(ctx, query, topicID)
@@ -185,6 +186,7 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 			&post.Title,
 			&post.Content,
 			&post.CreatedBy,
+			&post.Username,
 			&post.CreatedAt,
 			&post.UpdatedAt,
 		)
@@ -210,9 +212,10 @@ func (repo *Repository) GetPostByID(postID int) (*Post, error) {
 
 	var post Post
 	query := `
-		SELECT post_id, topic_id, title, content, created_by, created_at, updated_at
-		FROM posts
-		WHERE post_id = $1`
+		SELECT p.post_id, p.topic_id, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
+		FROM posts p
+		JOIN users u ON p.created_by = u.user_id
+		WHERE p.post_id = $1`
 
 	err := repo.DB.QueryRow(ctx, query, postID).Scan(
 		&post.PostID,
@@ -220,6 +223,7 @@ func (repo *Repository) GetPostByID(postID int) (*Post, error) {
 		&post.Title,
 		&post.Content,
 		&post.CreatedBy,
+		&post.Username,
 		&post.CreatedAt,
 		&post.UpdatedAt,
 	)
@@ -240,10 +244,11 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 	defer cancel()
 
 	query := `
-		SELECT comment_id, post_id, content, created_by, created_at, updated_at
-		FROM comments
-		WHERE post_id = $1
-		ORDER BY created_at DESC`
+		SELECT c.comment_id, c.post_id, c.content, c.created_by, u.username, c.created_at, c.updated_at
+		FROM comments c
+		JOIN users u ON c.created_by = u.user_id
+		WHERE c.post_id = $1
+		ORDER BY c.created_at DESC`
 
 	rows, err := repo.DB.Query(ctx, query, postID)
 	if err != nil {
@@ -260,6 +265,7 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 			&comment.PostID,
 			&comment.Content,
 			&comment.CreatedBy,
+			&comment.Username,
 			&comment.CreatedAt,
 			&comment.UpdatedAt,
 		)
@@ -310,6 +316,21 @@ func (repo *Repository) CreatePost(topicID int, title, content string, userID in
 		return nil, fmt.Errorf("failed to create post: %w", err)
 	}
 
+	// Fetch username of post creator
+	var username string
+	userQuery := `
+		SELECT username
+		FROM users
+		WHERE user_id = $1
+	`
+
+	err = repo.DB.QueryRow(ctx, userQuery, userID).Scan(&username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch username: %w", err)
+	}
+
+	post.Username = username
+
 	return &post, nil
 }
 
@@ -342,6 +363,21 @@ func (repo *Repository) CreateComment(postID int, content string, userID int) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to create comment: %w", err)
 	}
+
+	// Fetch username of comment creator
+	var username string
+	userQuery := `
+		SELECT username
+		FROM users
+		WHERE user_id = $1
+	`
+
+	err = repo.DB.QueryRow(ctx, userQuery, userID).Scan(&username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch username: %w", err)
+	}
+
+	comment.Username = username
 
 	return &comment, nil
 }
@@ -468,6 +504,21 @@ func (repo *Repository) UpdatePost(postID int, title, content string, userID int
 		return nil, fmt.Errorf("failed to update post: %w", err)
 	}
 
+	// Fetch username of post creator
+	var username string
+	userQuery := `
+		SELECT username
+		FROM users
+		WHERE user_id = $1
+	`
+
+	err = repo.DB.QueryRow(ctx, userQuery, userID).Scan(&username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch username: %w", err)
+	}
+
+	updatedPost.Username = username
+
 	return &updatedPost, nil
 }
 
@@ -528,6 +579,21 @@ func (repo *Repository) UpdateComment(commentID int, content string, userID int)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update comment: %w", err)
 	}
+
+	// Fetch username of comment creator
+	var username string
+	userQuery := `
+		SELECT username
+		FROM users
+		WHERE user_id = $1
+	`
+
+	err = repo.DB.QueryRow(ctx, userQuery, userID).Scan(&username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch username: %w", err)
+	}
+
+	updatedComment.Username = username
 
 	return &updatedComment, nil
 }
@@ -684,4 +750,123 @@ func (repo *Repository) DeleteTopic(topicID, userID int) error {
 	}
 
 	return nil
+}
+
+// GetUserByID fetches user by their unique user ID
+// Used internally when we need to get user details by ID
+func (repo *Repository) GetUserByID(userID int) (*User, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var user User
+	query := `
+		SELECT user_id, username, created_at, updated_at
+		FROM users
+		WHERE user_id = $1`
+
+	err := repo.DB.QueryRow(ctx, query, userID).Scan(
+		&user.UserID,
+		&user.Username,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("user with ID %d not found", userID)
+		}
+
+		return nil, fmt.Errorf("failed to fetch user: %w", err)
+	}
+
+	return &user, nil
+}
+
+// GetUserPosts fetches all posts created by a specific user
+func (repo *Repository) GetUserPosts(userID int) ([]*Post, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		SELECT p.post_id, p.topic_id, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
+		FROM posts p
+		JOIN users u ON p.created_by = u.user_id
+		WHERE p.created_by = $1
+		ORDER BY p.created_at DESC`
+
+	rows, err := repo.DB.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user posts: %w", err)
+	}
+	defer rows.Close()
+
+	posts := []*Post{}
+	for rows.Next() {
+		var post Post
+		err := rows.Scan(
+			&post.PostID,
+			&post.TopicID,
+			&post.Title,
+			&post.Content,
+			&post.CreatedBy,
+			&post.Username,
+			&post.CreatedAt,
+			&post.UpdatedAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user post: %w", err)
+		}
+		posts = append(posts, &post)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error encountered during row iteration: %w", err)
+	}
+
+	return posts, nil
+}
+
+// GetUserComments fetches all comments created by a specific user
+func (repo *Repository) GetUserComments(userID int) ([]*Comment, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		SELECT c.comment_id, c.post_id, c.content, c.created_by, u.username, c.created_at, c.updated_at
+		FROM comments c
+		JOIN users u ON c.created_by = u.user_id
+		WHERE c.created_by = $1
+		ORDER BY c.created_at DESC`
+
+	rows, err := repo.DB.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user comments: %w", err)
+	}
+	defer rows.Close()
+
+	comments := []*Comment{}
+	for rows.Next() {
+		var comment Comment
+		err := rows.Scan(
+			&comment.CommentID,
+			&comment.PostID,
+			&comment.Content,
+			&comment.CreatedBy,
+			&comment.Username,
+			&comment.CreatedAt,
+			&comment.UpdatedAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user comment: %w", err)
+		}
+		comments = append(comments, &comment)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error encountered during row iteration: %w", err)
+	}
+
+	return comments, nil
 }

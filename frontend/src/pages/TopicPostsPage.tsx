@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect } from "react";
-import { fetchPostsByTopic } from "../features/posts/postsSlice";
+import { fetchPostsByTopic } from "../features/postsSlice";
 import { Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Container, Typography } from "@mui/material";
 import { Add, ArrowBack } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
