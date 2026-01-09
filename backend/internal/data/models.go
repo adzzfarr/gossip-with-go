@@ -25,20 +25,22 @@ type Topic struct {
 
 // Post struct
 type Post struct {
-	PostID    int       `json:"postID" db:"post_id"`   // Primary key
-	TopicID   int       `json:"topicID" db:"topic_id"` // Foreign key to Topic
-	Title     string    `json:"title" db:"title"`
-	Content   string    `json:"content" db:"content"`
-	CreatedBy int       `json:"createdBy" db:"created_by"`
-	Username  string    `json:"username" db:"username"`
-	CreatedAt time.Time `json:"createdAt" db:"created_at"`
-	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
+	PostID     int       `json:"postID" db:"post_id"`   // Primary key
+	TopicID    int       `json:"topicID" db:"topic_id"` // Foreign key to Topic
+	TopicTitle string    `json:"topicTitle" db:"topic_title"`
+	Title      string    `json:"title" db:"title"`
+	Content    string    `json:"content" db:"content"`
+	CreatedBy  int       `json:"createdBy" db:"created_by"`
+	Username   string    `json:"username" db:"username"`
+	CreatedAt  time.Time `json:"createdAt" db:"created_at"`
+	UpdatedAt  time.Time `json:"updatedAt" db:"updated_at"`
 }
 
 // Comment struct
 type Comment struct {
 	CommentID int       `json:"commentID" db:"comment_id"` // Primary key
 	PostID    int       `json:"postID" db:"post_id"`       // Foreign key to Post
+	PostTitle string    `json:"postTitle" db:"post_title"`
 	Content   string    `json:"content" db:"content"`
 	CreatedBy int       `json:"createdBy" db:"created_by"`
 	Username  string    `json:"username" db:"username"`

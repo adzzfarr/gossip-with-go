@@ -11,6 +11,7 @@ interface User {
 interface Post {
     postID: number;
     topicID: number;
+    topicTitle?: string;
     title: string;
     content: string;
     createdBy: number;
@@ -22,6 +23,7 @@ interface Post {
 interface Comment {
     commentID: number;
     postID: number;
+    postTitle?: string;
     content: string;
     createdBy: number;
     username: string;

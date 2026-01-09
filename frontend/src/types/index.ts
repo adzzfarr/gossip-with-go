@@ -20,6 +20,7 @@ export interface Topic {
 export interface Post {
     postID: number;
     topicID: number;
+    topicTitle?: string;
     title: string;
     content: string;
     createdBy: number;
@@ -31,6 +32,7 @@ export interface Post {
 export interface Comment {
     commentID: number;
     postID: number;
+    postTitle?: string;
     content: string;
     createdBy: number;
     username: string;

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack, Delete, Edit } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
+import Username from "../components/Username";
 
 export default function PostPage() {
     const { postID } = useParams<{ postID: string}>();
@@ -245,13 +246,17 @@ export default function PostPage() {
                 <Box
                     sx={{
                         display: 'flex',
-                        gap: 2,
-                        mb: 2,
+                        alignItems: 'center',
+                        gap: 0.5,
                     }}
                 >
-                    <Typography variant="body2" color="text.secondary">
-                        u/{currentPost.username || 'Unknown'} 
-                    </Typography>
+                    <Username
+                        username={currentPost.username || 'Unknown'}
+                        userID={currentPost.createdBy}
+                        variant="body2"
+                        color="text.secondary"
+                    />
+                    
                     <Typography variant="body2" color="text.secondary">
                         {new Date(currentPost.createdAt).toLocaleString()}
                     </Typography>
@@ -343,11 +348,15 @@ export default function PostPage() {
                                                     sx={{
                                                         display: 'flex',
                                                         gap: 2,
+                                                        alignItems: 'center',
                                                     }}
                                                 >
-                                                    <Typography variant="body2" fontWeight="bold">
-                                                        u/{comment.username || 'Unknown'}
-                                                    </Typography>
+                                                    <Username
+                                                        username={comment.username || 'Unknown'}
+                                                        userID={comment.createdBy}
+                                                        variant="body2"
+                                                        fontWeight="bold"
+                                                    />
 
                                                     <Typography variant="body2" color="text.secondary">
                                                         {new Date(comment.createdAt).toLocaleString()}

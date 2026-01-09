@@ -164,9 +164,10 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 	defer cancel()
 
 	query := `
-		SELECT p.post_id, p.topic_id, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
+		SELECT p.post_id, p.topic_id, t.title as topic_title, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
 		FROM posts p
 		JOIN users u ON p.created_by = u.user_id
+		JOIN topics t ON p.topic_id = t.topic_id
 		WHERE p.topic_id = $1
 		ORDER BY created_at DESC`
 
@@ -183,6 +184,7 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 		err := rows.Scan(
 			&post.PostID,
 			&post.TopicID,
+			&post.TopicTitle,
 			&post.Title,
 			&post.Content,
 			&post.CreatedBy,
@@ -212,14 +214,16 @@ func (repo *Repository) GetPostByID(postID int) (*Post, error) {
 
 	var post Post
 	query := `
-		SELECT p.post_id, p.topic_id, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
+		SELECT p.post_id, p.topic_id, t.title as topic_title, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
 		FROM posts p
 		JOIN users u ON p.created_by = u.user_id
+		JOIN topics t ON p.topic_id = t.topic_id
 		WHERE p.post_id = $1`
 
 	err := repo.DB.QueryRow(ctx, query, postID).Scan(
 		&post.PostID,
 		&post.TopicID,
+		&post.TopicTitle,
 		&post.Title,
 		&post.Content,
 		&post.CreatedBy,
@@ -788,8 +792,9 @@ func (repo *Repository) GetUserPosts(userID int) ([]*Post, error) {
 	defer cancel()
 
 	query := `
-		SELECT p.post_id, p.topic_id, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
+		SELECT p.post_id, p.topic_id, t.title as topic_title, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
 		FROM posts p
+		JOIN topics t ON p.topic_id = t.topic_id
 		JOIN users u ON p.created_by = u.user_id
 		WHERE p.created_by = $1
 		ORDER BY p.created_at DESC`
@@ -806,6 +811,7 @@ func (repo *Repository) GetUserPosts(userID int) ([]*Post, error) {
 		err := rows.Scan(
 			&post.PostID,
 			&post.TopicID,
+			&post.TopicTitle,
 			&post.Title,
 			&post.Content,
 			&post.CreatedBy,
@@ -833,9 +839,10 @@ func (repo *Repository) GetUserComments(userID int) ([]*Comment, error) {
 	defer cancel()
 
 	query := `
-		SELECT c.comment_id, c.post_id, c.content, c.created_by, u.username, c.created_at, c.updated_at
+		SELECT c.comment_id, c.post_id, p.title as post_title, c.content, c.created_by, u.username, c.created_at, c.updated_at
 		FROM comments c
 		JOIN users u ON c.created_by = u.user_id
+		JOIN posts p ON c.post_id = p.post_id
 		WHERE c.created_by = $1
 		ORDER BY c.created_at DESC`
 
@@ -851,6 +858,7 @@ func (repo *Repository) GetUserComments(userID int) ([]*Comment, error) {
 		err := rows.Scan(
 			&comment.CommentID,
 			&comment.PostID,
+			&comment.PostTitle,
 			&comment.Content,
 			&comment.CreatedBy,
 			&comment.Username,

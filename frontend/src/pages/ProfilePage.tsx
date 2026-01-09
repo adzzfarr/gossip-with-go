@@ -164,6 +164,7 @@ export default function ProfilePage() {
                                                 <Typography variant="h6" gutterBottom>
                                                     {post.title}
                                                 </Typography>
+
                                                 <Typography
                                                     variant="body2"
                                                     color="text.secondary"
@@ -177,16 +178,23 @@ export default function ProfilePage() {
                                                 >
                                                     {post.content}
                                                 </Typography>
-                                                <Typography 
-                                                    variant="caption" 
-                                                    color="text.secondary" 
-                                                    sx={{ 
-                                                        mt: 1, 
-                                                        display: 'block' 
-                                                    }}
-                                                >
-                                                    {new Date(post.createdAt).toLocaleString()}
-                                                </Typography>
+
+                                                <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        in '{post.topicTitle}'
+                                                    </Typography>
+
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        •
+                                                    </Typography>
+
+                                                    <Typography 
+                                                        variant="caption" 
+                                                        color="text.secondary"
+                                                    >
+                                                        {new Date(post.createdAt).toLocaleString()}
+                                                    </Typography>
+                                                </Box>
                                             </CardContent>
                                         </CardActionArea>
                                     </Card>
@@ -214,16 +222,21 @@ export default function ProfilePage() {
                                                     <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                                                         {comment.content}
                                                     </Typography>
-                                                    <Typography 
-                                                        variant="caption"
-                                                        color="text.secondary"
-                                                        sx={{ 
-                                                            mt: 1, 
-                                                            display: 'block' 
-                                                        }}
-                                                    >
-                                                        {new Date(comment.createdAt).toLocaleString()}
-                                                    </Typography>
+
+                                                    <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            on '{comment.postTitle}'  
+                                                        </Typography>
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            •
+                                                        </Typography>
+                                                        <Typography 
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                        >
+                                                            {new Date(comment.createdAt).toLocaleString()}
+                                                        </Typography>
+                                                    </Box>
                                                 </CardContent>
                                             </CardActionArea>
                                         </Card>
