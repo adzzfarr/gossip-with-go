@@ -19,6 +19,7 @@ type Topic struct {
 	Title       string    `json:"title" db:"title"`
 	Description string    `json:"description" db:"description"`
 	CreatedBy   int       `json:"createdBy" db:"created_by"`
+	Username    string    `json:"username" db:"username"`
 	CreatedAt   time.Time `json:"createdAt" db:"created_at"`
 	UpdatedAt   time.Time `json:"updatedAt" db:"updated_at"`
 }

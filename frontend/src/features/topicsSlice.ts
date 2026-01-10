@@ -55,6 +55,42 @@ export const createTopic = createAsyncThunk(
     }
 );
 
+export const updateTopic = createAsyncThunk(
+    'topics/updateTopic',
+    async (
+        { topicID, title, description } : {
+            topicID: number;
+            title: string;
+            description: string;
+        },
+        { rejectWithValue }
+    ) => {
+        try {
+            const response = await apiClient.put<Topic>(
+                `/topics/${topicID}`,
+                { title, description }
+            );
+
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to update topic');
+        }
+    }
+);
+
+// Delete Topic
+export const deleteTopic = createAsyncThunk(
+    'topics/deleteTopic',
+    async (topicID: number, { rejectWithValue }) => {
+        try {
+            await apiClient.delete(`/topics/${topicID}`);
+            return topicID;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to delete topic');
+        }
+    }
+)
+
 const topicsSlice = createSlice({
     name: 'topics',
     initialState,
@@ -108,6 +144,60 @@ const topicsSlice = createSlice({
 
         builder.addCase(
             createTopic.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
+            }
+        );
+
+        // Update topic
+        builder.addCase(
+            updateTopic.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            updateTopic.fulfilled,
+            (state, action: PayloadAction<Topic>) => {
+                state.submitting = false;
+                const index = state.topics.findIndex(topic => topic.topicID === action.payload.topicID);
+                if (index !== -1) {
+                    state.topics[index] = action.payload;
+                }
+            }
+        );
+
+        builder.addCase(
+            updateTopic.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
+            }
+        );
+
+        // Delete topic
+        builder.addCase(
+            deleteTopic.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            deleteTopic.fulfilled,
+            (state, action: PayloadAction<number>) => {
+                state.submitting = false;
+                // Remove deleted topic from state
+                state.topics = state.topics.filter(topic => topic.topicID !== action.payload);
+            }
+        );
+
+        builder.addCase(
+            deleteTopic.rejected,
             (state, action) => {
                 state.submitting = false;
                 state.submitError = action.payload as string;

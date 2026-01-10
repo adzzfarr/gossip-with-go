@@ -1,73 +1,68 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
-import { useEffect, useState } from "react";
-import { clearError, fetchPostByID, updatePost } from "../features/postsSlice";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { clearError, updateTopic } from "../features/topicsSlice";
 import { Alert, Box, Button, CircularProgress, Container, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack } from "@mui/icons-material";
 
-export default function EditPostPage() {
-    const { postID } = useParams<{ postID: string }>();
+export default function EditTopicPage() {
+    const { topicID} = useParams<{ topicID: string }>();
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
 
-    const { currentPost, loading, submitting, submitError } = useAppSelector(state => state.posts);
+    const { topics, loading, submitting, submitError } = useAppSelector(state => state.topics);
     const { userID } = useAppSelector(state => state.auth);
 
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
+    // Find topic to edit
+    const topic = topics.find(t => t.topicID === parseInt(topicID || '0'));
 
-    // Fetch post on mount
+    const [title, setTitle] = useState(topic ? topic.title : '');
+    const [description, setDescription] = useState(topic ? topic.description : '');
+
     useEffect(() => {
-        if (postID) {
-            dispatch(fetchPostByID(parseInt(postID)));
+        if (topic) {
+            setTitle(topic.title);
+            setDescription(topic.description);
         }
-    }, [postID, dispatch]);
+    }, [topic]);
 
-    // Populate form
-    useEffect(() => {
-        if (currentPost) {
-            setTitle(currentPost.title);
-            setContent(currentPost.content);
-        }
-    }, [currentPost]);
+    // Check if user is author of topic
+    const isAuthor = topic && topic.createdBy === userID;
 
-    // Check if user is author of post
-    const isAuthor = currentPost && currentPost.createdBy === userID;
-
-    const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleTitleChange = (e: ChangeEvent<HTMLInputElement>) => {
         setTitle(e.target.value);
 
         if (submitError) {
             dispatch(clearError());
         }
-    }
+    };
 
-    const handleContentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setContent(e.target.value);
+    const handleDescriptionChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setDescription(e.target.value);
 
         if (submitError) {
             dispatch(clearError());
         }
-    }
+    };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
 
-        if (!postID || !title.trim() || !content.trim()) return;
+        if (!topicID || !title.trim() || !description.trim()) return;
 
         const result = await dispatch(
-            updatePost({
-                postID: parseInt(postID),
+            updateTopic({
+                topicID: parseInt(topicID),
                 title: title.trim(),
-                content: content.trim(),
+                description: description.trim()
             })
         );
 
-        if (updatePost.fulfilled.match(result)) {
-            // Redirect to post page on successful update
-            navigate(`/posts/${postID}`);
+        if (updateTopic.fulfilled.match(result)) {
+            // Redirect to topic page on successful update
+            navigate(`/topics/${topicID}`);
         }
-    }
+    };
 
     if (loading) {
         return (
@@ -84,16 +79,16 @@ export default function EditPostPage() {
         );
     }
 
-    if (!currentPost) {
+    if (!topic) {
         return (
             <Container sx={{ mt: 4 }}>
-                <Alert severity="error">Post not found.</Alert>
+                <Alert severity="error">Topic not found.</Alert>
                 <Button
                     startIcon={<ArrowBack />}
-                    onClick={() => navigate(`/posts`)}
+                    onClick={() => navigate(`/topics`)}
                     sx={{ mt: 2 }}
                 >
-                    Back to Posts
+                    Back to Topics
                 </Button>
             </Container>
         );
@@ -102,13 +97,13 @@ export default function EditPostPage() {
     if (!isAuthor) {
         return (
             <Container sx={{ mt: 4 }}>
-                <Alert severity="error">You are not authorised to edit this post.</Alert>
+                <Alert severity="error">You are not authorised to edit this topic.</Alert>
                 <Button
                     startIcon={<ArrowBack />}
-                    onClick={() => navigate(`/posts/${postID}`)}
+                    onClick={() => navigate(`/topics/${topicID}`)}
                     sx={{ mt: 2 }}
                 >
-                    Back to Post
+                    Back to Topic
                 </Button>
             </Container>
         );
@@ -118,17 +113,16 @@ export default function EditPostPage() {
         <Container
             maxWidth="md"
             sx={{
-                mt: 4,
+                mt: 4, 
                 mb: 4,
             }}
         >
             <Button
                 startIcon={<ArrowBack />}
-                onClick={() => navigate(`/posts/${postID}`)}
+                onClick={() => navigate(`/topics/${topicID}`)}
                 sx={{ mb: 3 }}
-                variant="outlined"
             >
-                Back to Post
+                Back to Topic
             </Button>
 
             <Paper elevation={2} sx={{ p: 3 }}>
@@ -137,7 +131,7 @@ export default function EditPostPage() {
                     component="h1"
                     gutterBottom
                 >
-                    Edit Post
+                    Edit Topic
                 </Typography>
 
                 {submitError && (
@@ -150,21 +144,21 @@ export default function EditPostPage() {
                         label="Title"
                         value={title}
                         onChange={handleTitleChange}
-                        required
                         disabled={submitting}
+                        required
                         sx={{ mb: 2 }}
                     />
 
                     <TextField 
                         fullWidth
-                        label="Content"
-                        value={content}
-                        onChange={handleContentChange}
-                        required
+                        label="Description"
+                        value={description}
+                        onChange={handleDescriptionChange}
                         disabled={submitting}
+                        required
                         multiline
-                        rows={10}
-                        sx={{ mb: 3 }}
+                        minRows={3}
+                        sx={{ mb: 2 }}
                     />
 
                     <Box
@@ -176,14 +170,14 @@ export default function EditPostPage() {
                         <Button
                             type="submit"
                             variant="contained"
-                            disabled={submitting || !title.trim() || !content.trim()}
+                            disabled={submitting || !title.trim() || !description.trim()}
                         >
                             {submitting ? <CircularProgress size={24} /> : 'Save Changes'}
-                        </Button>
+                        </Button>    
 
                         <Button
                             variant="outlined"
-                            onClick={() => navigate(`/posts/${postID}`)}
+                            onClick={() => navigate(`/topics/${topicID}`)}
                             disabled={submitting}
                         >
                             Cancel
@@ -193,4 +187,5 @@ export default function EditPostPage() {
             </Paper>
         </Container>
     );
+        
 }

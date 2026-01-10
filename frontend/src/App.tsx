@@ -22,6 +22,7 @@ import Layout from './components/Layout';
 import EditPostPage from './pages/EditPostPage';
 import CreateTopicPage from './pages/CreateTopicPage';
 import ProfilePage from './pages/ProfilePage';
+import EditTopicPage from './pages/EditTopicPage';
 
 function ThemePreview() {
   const dispatch = useAppDispatch();
@@ -312,6 +313,17 @@ function App() {
               </Layout>) 
             : (<Navigate to="/login" replace />)
         } 
+      />
+
+      <Route
+        path='/topics/:topicID/edit'
+        element={
+          isAuthenticated 
+            ? (<Layout>
+                <EditTopicPage />
+              </Layout>) 
+            : (<Navigate to="/login" replace />)
+        }
       />
 
       <Route 

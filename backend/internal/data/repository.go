@@ -24,9 +24,10 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 	defer cancel() // Ensures context is cleaned up when function returns
 
 	query := `
-        SELECT topic_id, title, description, created_by, created_at, updated_at
-        FROM topics
-        ORDER BY created_at DESC`
+        SELECT t.topic_id, t.title, t.description, t.created_by, u.username, t.created_at, t.updated_at
+        FROM topics t
+        JOIN users u ON t.created_by = u.user_id
+        ORDER BY t.created_at DESC`
 
 	rows, err := repo.DB.Query(ctx, query)
 	if err != nil {
@@ -45,6 +46,7 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 			&t.Title,
 			&t.Description,
 			&t.CreatedBy,
+			&t.Username,
 			&t.CreatedAt,
 			&t.UpdatedAt,
 		)
@@ -61,6 +63,37 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 	}
 
 	return topics, nil
+}
+
+func (repo *Repository) GetTopicByID(topicID int) (*Topic, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var topic Topic
+	query := `
+		SELECT t.topic_id, t.title, t.description, t.created_by, u.username, t.created_at, t.updated_at
+        FROM topics t
+        JOIN users u ON t.created_by = u.user_id
+		WHERE t.topic_id = $1`
+
+	err := repo.DB.QueryRow(ctx, query, topicID).Scan(
+		&topic.TopicID,
+		&topic.Title,
+		&topic.Description,
+		&topic.CreatedBy,
+		&topic.Username,
+		&topic.CreatedAt,
+		&topic.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("topic not found: %d", topicID)
+		}
+		return nil, fmt.Errorf("query to find topic failed: %w", err)
+	}
+
+	return &topic, nil
 }
 
 // GetUserByUsername fetches user by their unique username
@@ -154,6 +187,20 @@ func (repo *Repository) CreateTopic(title, description string, userID int) (*Top
 	if err != nil {
 		return nil, fmt.Errorf("failed to create topic: %w", err)
 	}
+
+	// Fetch username of topic creator
+	var username string
+	userQuery := `
+		SELECT username
+		FROM users
+		WHERE user_id = $1`
+
+	err = repo.DB.QueryRow(ctx, userQuery, userID).Scan(&username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch username: %w", err)
+	}
+
+	topic.Username = username
 
 	return &topic, nil
 }
@@ -422,7 +469,14 @@ func (repo *Repository) UpdateTopic(topicID int, title, description string, user
 		UPDATE topics
 		SET title = $1, description = $2, updated_at = NOW()
 		WHERE topic_id = $3 AND created_by = $4
-		RETURNING topic_id, title, description, created_by, created_at, updated_at`
+		RETURNING 
+			topic_id, 
+			title, 
+			description, 
+			created_by, 
+			(SELECT username FROM users WHERE user_id = $4) AS username,
+			created_at, 
+			updated_at`
 
 	var updatedTopic Topic
 	err = repo.DB.QueryRow(
@@ -437,6 +491,7 @@ func (repo *Repository) UpdateTopic(topicID int, title, description string, user
 		&updatedTopic.Title,
 		&updatedTopic.Description,
 		&updatedTopic.CreatedBy,
+		&updatedTopic.Username,
 		&updatedTopic.CreatedAt,
 		&updatedTopic.UpdatedAt,
 	)
@@ -484,7 +539,15 @@ func (repo *Repository) UpdatePost(postID int, title, content string, userID int
 		UPDATE posts
 		SET title = $1, content = $2, updated_at = NOW()
 		WHERE post_id = $3 AND created_by = $4
-		RETURNING post_id, topic_id, title, content, created_by, created_at, updated_at`
+		RETURNING 
+			post_id, 
+			topic_id, 
+			title, 
+			content, 
+			created_by, 
+			(SELECT username FROM users WHERE user_id = $4) AS username,
+			created_at, 
+			updated_at`
 
 	var updatedPost Post
 	err = repo.DB.QueryRow(
@@ -500,6 +563,7 @@ func (repo *Repository) UpdatePost(postID int, title, content string, userID int
 		&updatedPost.Title,
 		&updatedPost.Content,
 		&updatedPost.CreatedBy,
+		&updatedPost.Username,
 		&updatedPost.CreatedAt,
 		&updatedPost.UpdatedAt,
 	)
@@ -507,21 +571,6 @@ func (repo *Repository) UpdatePost(postID int, title, content string, userID int
 	if err != nil {
 		return nil, fmt.Errorf("failed to update post: %w", err)
 	}
-
-	// Fetch username of post creator
-	var username string
-	userQuery := `
-		SELECT username
-		FROM users
-		WHERE user_id = $1
-	`
-
-	err = repo.DB.QueryRow(ctx, userQuery, userID).Scan(&username)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch username: %w", err)
-	}
-
-	updatedPost.Username = username
 
 	return &updatedPost, nil
 }
@@ -562,7 +611,14 @@ func (repo *Repository) UpdateComment(commentID int, content string, userID int)
 		UPDATE comments
 		SET content = $1, updated_at = NOW()
 		WHERE comment_id = $2 AND created_by = $3
-		RETURNING comment_id, post_id, content, created_by, created_at, updated_at`
+		RETURNING 
+			comment_id, 
+			post_id, 
+			content, 
+			created_by, 
+			(SELECT username FROM users WHERE user_id = $3) AS username,
+			created_at, 
+			updated_at`
 
 	var updatedComment Comment
 	err = repo.DB.QueryRow(
@@ -576,6 +632,7 @@ func (repo *Repository) UpdateComment(commentID int, content string, userID int)
 		&updatedComment.PostID,
 		&updatedComment.Content,
 		&updatedComment.CreatedBy,
+		&updatedComment.Username,
 		&updatedComment.CreatedAt,
 		&updatedComment.UpdatedAt,
 	)
@@ -583,21 +640,6 @@ func (repo *Repository) UpdateComment(commentID int, content string, userID int)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update comment: %w", err)
 	}
-
-	// Fetch username of comment creator
-	var username string
-	userQuery := `
-		SELECT username
-		FROM users
-		WHERE user_id = $1
-	`
-
-	err = repo.DB.QueryRow(ctx, userQuery, userID).Scan(&username)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch username: %w", err)
-	}
-
-	updatedComment.Username = username
 
 	return &updatedComment, nil
 }

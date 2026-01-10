@@ -13,6 +13,7 @@ export interface Topic {
     title: string;
     description: string;
     createdBy: number;
+    username: string;
     createdAt: string;
     updatedAt: string;
 }
