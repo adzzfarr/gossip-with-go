@@ -2,8 +2,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect, useState } from "react";
 import { fetchPostsByTopic } from "../features/postsSlice";
-import { Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Paper, Typography } from "@mui/material";
-import { Add, ArrowBack, Delete, Edit } from "@mui/icons-material";
+import { Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Grid, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
+import { Add, ArrowBack, Clear, Delete, Edit, Search } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 import Username from "../components/Username";
 import { deleteTopic } from "../features/topicsSlice";
@@ -18,6 +18,7 @@ export default function TopicPostsPage() {
     const { userID } = useAppSelector(state => state.auth);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Find current topic from topics list
     const topic = topics.find(t => t.topicID === parseInt(topicID || '0'));
@@ -30,6 +31,20 @@ export default function TopicPostsPage() {
             dispatch(fetchPostsByTopic(parseInt(topicID)));
         }
     }, [dispatch, topicID]);
+
+    const filteredPosts = posts.filter(
+        post => {
+            const query = searchQuery.trim().toLowerCase();
+            return (
+                post.title.toLowerCase().includes(query) ||
+                post.content.toLowerCase().includes(query)
+            );
+        }
+    )
+
+    const handleClearSearch = () => {
+        setSearchQuery('');
+    }
 
     const handleDeleteTopic = async () => {
         if (!topic) return;
@@ -200,107 +215,190 @@ export default function TopicPostsPage() {
 
             {/* Posts Section */}
             <Box>
+                {/* Header (Search Bar + New Post) */}
                 <Box
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
+                        flexWrap: 'wrap',
                         mb: 3,
+                        gap: 2,
                     }}    
                 >
-                    <Typography variant="h5" component="h2">
-                        Posts
-                    </Typography>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 2,
+                            flex: 1,
+                            maxWidth: 600,
+                        }}
+                    >
+                        <Typography variant="h5" component="h2">
+                            Posts
+                        </Typography>
+                        
+                        {/* Search Bar */}
+                        <TextField 
+                            size="small"
+                            fullWidth
+                            placeholder="Search Posts..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            slotProps={{
+                                input: {
+                                    'startAdornment': (
+                                        <InputAdornment position="start">
+                                            <Search color="action"/>
+                                        </InputAdornment>
+                                    ),
+                                    'endAdornment': searchQuery && (
+                                        <InputAdornment position="end">
+                                            <IconButton
+                                                size="small"
+                                                onClick={handleClearSearch}
+                                                title="Clear Search"
+                                            >
+                                                <Clear />
+                                            </IconButton>
+                                        </InputAdornment>
+                                    )
+                                }
+                            }}
+                        />
+                    </Box>
 
                     <Button
                         startIcon={<Add />}
                         variant="contained"
                         onClick={() => navigate(`/topics/${topicID}/create-post`)}
+                        sx={{ whiteSpace: 'nowrap' }}
                     >
                         Create Post 
                     </Button>
                 </Box>
 
-                {posts.length === 0
+                {searchQuery && (
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2 }}
+                    >
+                        Showing {filteredPosts.length} result{filteredPosts.length !== 1 ? 's' : ''} for "{searchQuery}"
+                    </Typography>
+                )}
+
+                {filteredPosts.length === 0
                 ? (
                     <Alert severity="info">
-                        No posts available for this topic. Be the first to create one!
+                        {
+                            searchQuery
+                                ? `No posts matching "${searchQuery}".`
+                                : 'No posts available. Be the first to create one!'
+                        }
                     </Alert>
                 )
                 : (
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 2,
-                        }}
-                    >
-                        {posts.map(
+                    <Grid container spacing={3}>
+                        {filteredPosts.map(
                             (post) => (
-                                <Card key={post.postID} variant="outlined"> 
-                                    <CardActionArea onClick={() => navigate(`/posts/${post.postID}`)}>
-                                        <CardContent>
-                                            <Typography
-                                                variant="h6"
-                                                component="h2"
-                                                gutterBottom
-                                            >
-                                                {post.title}
-                                            </Typography>
-
-                                            <Typography
-                                                variant="body2"
-                                                color="text.secondary"
+                                <Grid
+                                    size={{
+                                        xs: 12,
+                                        sm: 6,
+                                        md: 4,
+                                    }}
+                                    key={post.postID}
+                                >
+                                    <Card 
+                                        variant="outlined"
+                                        sx={{
+                                            height: '100%',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                        }}
+                                    > 
+                                        <CardActionArea 
+                                            onClick={() => navigate(`/posts/${post.postID}`)}
+                                            sx={{
+                                                height: '100%',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'stretch',
+                                            }}    
+                                        >
+                                            <CardContent
                                                 sx={{
-                                                    display: '-webkit-box',
-                                                    WebkitLineClamp: 3,
-                                                    WebkitBoxOrient: 'vertical',
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    mb: 2,
-
-                                                }}
-                                            >
-                                                {post.content}
-                                            </Typography>
-
-                                            <Box
-                                                sx={{
+                                                    flex: 1,
                                                     display: 'flex',
-                                                    gap: 2,
-                                                    alignItems: 'center',
-                                                    mt: 2
+                                                    flexDirection: 'column',
                                                 }}
                                             >
+                                                <Typography
+                                                    variant="h6"
+                                                    component="h2"
+                                                    fontWeight="bold"
+                                                    gutterBottom
+                                                >
+                                                    {post.title}
+                                                </Typography>
+
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                    sx={{
+                                                        display: '-webkit-box',
+                                                        WebkitLineClamp: 3,
+                                                        WebkitBoxOrient: 'vertical',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        mb: 2,
+                                                        flex: 1,
+                                                    }}
+                                                >
+                                                    {post.content}
+                                                </Typography>
+
                                                 <Box
                                                     sx={{
                                                         display: 'flex',
+                                                        gap: 0.5,
                                                         alignItems: 'center',
-                                                        gap: 0.5
+                                                        mt: 'auto',
                                                     }}
                                                 >
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        Posted by
-                                                    </Typography>
+                                                    <Box
+                                                        sx={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 0.5
+                                                        }}
+                                                    >
+                                                        <Typography variant="caption" color="text.secondary">
+                                                            Posted by
+                                                        </Typography>
 
-                                                    <Username
-                                                        username={post.username || "Unknown"}
-                                                        userID={post.createdBy}
-                                                        variant="caption"
-                                                        color="text.secondary"
-                                                    />
+                                                        <Username
+                                                            username={post.username || "Unknown"}
+                                                            userID={post.createdBy}
+                                                            variant="caption"
+                                                            color="text.secondary"
+                                                        />
+                                                    </Box>
+                                                    <Typography variant="caption" color="text.secondary">•</Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {new Date(post.createdAt).toLocaleString()}
+                                                    </Typography>
                                                 </Box>
-                                                <Typography variant="caption" color="text.secondary">•</Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {new Date(post.createdAt).toLocaleString()}
-                                                </Typography>
-                                            </Box>
-                                        </CardContent>
-                                    </CardActionArea>
-                                </Card>
+                                            </CardContent>
+                                        </CardActionArea>
+                                    </Card>
+                                </Grid>
+                                
                             )
                         )}
-                    </Box>
+                    </Grid>
                 )}
             </Box>
 

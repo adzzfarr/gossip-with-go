@@ -13,20 +13,6 @@ export default function TopicsPage() {
 
     const [searchQuery, setSearchQuery] = useState('');
 
-
-
-    // Filter topics based on search query
-    const filteredTopics = topics.filter(
-        topic => {
-            const query = searchQuery.trim().toLowerCase();
-            return (
-                topic.title.toLowerCase().includes(query) ||
-                topic.description.toLowerCase().includes(query) ||
-                topic.username.toLowerCase().includes(query)
-            );
-        }
-    );
-
     const handleClearSearch = () => {
         setSearchQuery('');
     }
@@ -34,6 +20,13 @@ export default function TopicsPage() {
     useEffect(() => {
         dispatch(fetchTopics());
     }, [dispatch]);
+
+    const filteredTopics = topics.filter(
+        topic => {
+            const query = searchQuery.trim().toLowerCase();
+            return topic.title.toLowerCase().includes(query);
+        }
+    );
 
     if (loading) {
         return (
@@ -145,7 +138,7 @@ export default function TopicsPage() {
             )}
 
             {/* Topics List */}
-            {topics.length === 0 
+            {filteredTopics.length === 0 
                 ? (<Alert severity="info">
                     {
                         searchQuery
