@@ -33,8 +33,15 @@ func (handler *CommentHandler) GetCommentsByPostID(ctx *gin.Context) {
 		return
 	}
 
+	// Get userID from context (nil if unauthenticated)
+	var userID *int
+	if uid, ok := ctx.Get("userID"); ok {
+		uidInt := uid.(int)
+		userID = &uidInt
+	}
+
 	// Call service layer
-	comments, err := handler.CommentService.GetCommentsByPostID(postID)
+	comments, err := handler.CommentService.GetCommentsByPostID(postID, userID)
 
 	if err != nil {
 		// Send ISE status to client

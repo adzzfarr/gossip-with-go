@@ -36,6 +36,54 @@ func (handler *TopicHandler) GetAllTopics(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, topics)
 }
 
+// GetTopicByID handles GET requests for a specific topic by its ID
+func (handler *TopicHandler) GetTopicByID(ctx *gin.Context) {
+	// Get topicID from URL parameter
+	topicIDStr := ctx.Param("topicID")
+	topicID, err := strconv.Atoi(topicIDStr)
+
+	if err != nil {
+		ctx.JSON(
+			http.StatusBadRequest,
+			gin.H{"error": "Invalid topic ID"})
+		return
+	}
+
+	// Call service layer
+	topic, err := handler.TopicService.GetTopicByID(topicID)
+
+	if err != nil {
+		errMsg := err.Error()
+
+		// Check for not found errors (Not Found 404)
+		if strings.Contains(errMsg, "not found") {
+			ctx.JSON(
+				http.StatusNotFound,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Check for validation errors (Bad Request 400)
+		if strings.Contains(errMsg, "invalid topic ID") {
+			ctx.JSON(
+				http.StatusBadRequest,
+				gin.H{"error": errMsg},
+			)
+			return
+		}
+
+		// Otherwise, send ISE status to client
+		ctx.JSON(
+			http.StatusInternalServerError,
+			gin.H{"error": "Failed to fetch topic"},
+		)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, topic)
+}
+
 // CreateTopicRequest defines expected JSON input for new topics
 type CreateTopicRequest struct {
 	Title       string `json:"title" binding:"required"`

@@ -18,14 +18,14 @@ func NewCommentService(repo *data.Repository) *CommentService {
 }
 
 // GetCommentsByPostID retrieves all comments for a given post
-func (commentService *CommentService) GetCommentsByPostID(postID int) ([]*data.Comment, error) {
+func (commentService *CommentService) GetCommentsByPostID(postID int, userID *int) ([]*data.Comment, error) {
 	// Validate post ID
 	if postID <= 0 {
 		return nil, fmt.Errorf("invalid post ID: %d", postID)
 	}
 
 	// Delegate call to repository layer
-	comments, err := commentService.Repo.GetCommentsByPostID(postID)
+	comments, err := commentService.Repo.GetCommentsByPostID(postID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get comments for post ID %d: %w", postID, err)
 	}
@@ -36,6 +36,22 @@ func (commentService *CommentService) GetCommentsByPostID(postID int) ([]*data.C
 	}
 
 	return comments, nil
+}
+
+// GetCommentByID retrieves a specific comment by its ID
+func (commentService *CommentService) GetCommentByID(commentID int, userID *int) (*data.Comment, error) {
+	// Validate comment ID
+	if commentID <= 0 {
+		return nil, fmt.Errorf("invalid comment ID: %d", commentID)
+	}
+
+	// Delegate call to repository layer
+	comment, err := commentService.Repo.GetCommentByID(commentID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get comment by ID %d: %w", commentID, err)
+	}
+
+	return comment, nil
 }
 
 // CreateComment creates a new comment on a post

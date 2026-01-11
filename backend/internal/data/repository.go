@@ -206,19 +206,36 @@ func (repo *Repository) CreateTopic(title, description string, userID int) (*Top
 }
 
 // GetPostsByTopicID fetches all posts for a given topic ID
-func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
+func (repo *Repository) GetPostsByTopicID(topicID int, userID *int) ([]*Post, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	query := `
-		SELECT p.post_id, p.topic_id, t.title as topic_title, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
+		SELECT 
+			p.post_id, 
+			p.topic_id, 
+			t.title as topic_title, 
+			p.title, 
+			p.content, 
+			p.created_by, 
+			u.username, 
+			p.created_at, 
+			p.updated_at,
+			p.vote_count,
+			CASE 
+				WHEN $2::integer IS NOT NULL THEN (
+					SELECT vote_type FROM votes 
+					WHERE user_id = $2 AND post_id = p.post_id
+				)
+				ELSE NULL
+			END AS user_vote
 		FROM posts p
 		JOIN users u ON p.created_by = u.user_id
 		JOIN topics t ON p.topic_id = t.topic_id
 		WHERE p.topic_id = $1
-		ORDER BY created_at DESC`
+		ORDER BY p.created_at DESC`
 
-	rows, err := repo.DB.Query(ctx, query, topicID)
+	rows, err := repo.DB.Query(ctx, query, topicID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query posts: %w", err)
 	}
@@ -238,6 +255,8 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 			&post.Username,
 			&post.CreatedAt,
 			&post.UpdatedAt,
+			&post.VoteCount,
+			&post.UserVote,
 		)
 
 		if err != nil {
@@ -255,19 +274,36 @@ func (repo *Repository) GetPostsByTopicID(topicID int) ([]*Post, error) {
 }
 
 // GetPostByID fetches a specific post by its ID
-func (repo *Repository) GetPostByID(postID int) (*Post, error) {
+func (repo *Repository) GetPostByID(postID int, userID *int) (*Post, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var post Post
 	query := `
-		SELECT p.post_id, p.topic_id, t.title as topic_title, p.title, p.content, p.created_by, u.username, p.created_at, p.updated_at
+		SELECT 
+			p.post_id, 
+			p.topic_id,
+			t.title as topic_title, 
+			p.title, 
+			p.content, 
+			p.created_by, 
+			u.username, 
+			p.created_at, 
+			p.updated_at,
+			p.vote_count,
+			CASE
+				WHEN $2::integer IS NOT NULL THEN (
+					SELECT vote_type FROM votes
+					WHERE user_id = $2 AND post_id = p.post_id
+				)
+				ELSE NULL
+			END AS user_vote
 		FROM posts p
 		JOIN users u ON p.created_by = u.user_id
 		JOIN topics t ON p.topic_id = t.topic_id
 		WHERE p.post_id = $1`
 
-	err := repo.DB.QueryRow(ctx, query, postID).Scan(
+	err := repo.DB.QueryRow(ctx, query, postID, userID).Scan(
 		&post.PostID,
 		&post.TopicID,
 		&post.TopicTitle,
@@ -277,6 +313,8 @@ func (repo *Repository) GetPostByID(postID int) (*Post, error) {
 		&post.Username,
 		&post.CreatedAt,
 		&post.UpdatedAt,
+		&post.VoteCount,
+		&post.UserVote,
 	)
 
 	if err != nil {
@@ -290,18 +328,33 @@ func (repo *Repository) GetPostByID(postID int) (*Post, error) {
 }
 
 // GetCommentsByPostID fetches all comments for a given post ID
-func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
+func (repo *Repository) GetCommentsByPostID(postID int, userID *int) ([]*Comment, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	query := `
-		SELECT c.comment_id, c.post_id, c.content, c.created_by, u.username, c.created_at, c.updated_at
+		SELECT 
+			c.comment_id, 
+			c.post_id, 
+			c.content, 
+			c.created_by, 
+			u.username, 
+			c.created_at, 
+			c.updated_at,
+			c.vote_count,
+			CASE
+				WHEN $2::integer IS NOT NULL THEN (
+					SELECT vote_type FROM votes
+					WHERE user_id = $2 AND comment_id = c.comment_id
+				)
+				ELSE NULL
+			END AS user_vote
 		FROM comments c
 		JOIN users u ON c.created_by = u.user_id
 		WHERE c.post_id = $1
 		ORDER BY c.created_at DESC`
 
-	rows, err := repo.DB.Query(ctx, query, postID)
+	rows, err := repo.DB.Query(ctx, query, postID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query comments: %w", err)
 	}
@@ -319,6 +372,8 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 			&comment.Username,
 			&comment.CreatedAt,
 			&comment.UpdatedAt,
+			&comment.VoteCount,
+			&comment.UserVote,
 		)
 
 		if err != nil {
@@ -333,6 +388,58 @@ func (repo *Repository) GetCommentsByPostID(postID int) ([]*Comment, error) {
 	}
 
 	return comments, nil
+}
+
+// GetCommentByID fetches a specific comment by its ID
+func (repo *Repository) GetCommentByID(commentID int, userID *int) (*Comment, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var comment Comment
+	query := `
+		SELECT
+			c.comment_id,
+			c.post_id,
+			p.title as post_title,
+			c.content,
+			c.created_by,
+			u.username,
+			c.created_at,
+			c.updated_at,
+			c.vote_count,
+			CASE
+				WHEN $2::integer IS NOT NULL THEN (
+					SELECT vote_type FROM votes
+					WHERE user_id = $2 AND comment_id = c.comment_id
+				)
+				ELSE NULL
+			END AS user_vote
+		FROM comments c
+		JOIN users u ON c.created_by = u.user_id
+		JOIN posts p ON c.post_id = p.post_id
+		WHERE c.comment_id = $1`
+
+	err := repo.DB.QueryRow(ctx, query, commentID, userID).Scan(
+		&comment.CommentID,
+		&comment.PostID,
+		&comment.PostTitle,
+		&comment.Content,
+		&comment.CreatedBy,
+		&comment.Username,
+		&comment.CreatedAt,
+		&comment.UpdatedAt,
+		&comment.VoteCount,
+		&comment.UserVote,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("comment not found with ID: %d", commentID)
+		}
+		return nil, fmt.Errorf("query to find comment failed: %w", err)
+	}
+
+	return &comment, nil
 }
 
 // CreatePost inserts a new post into the database
@@ -919,4 +1026,138 @@ func (repo *Repository) GetUserComments(userID int) ([]*Comment, error) {
 	}
 
 	return comments, nil
+}
+
+// VotePost creates/updates a vote on a post
+func (repo *Repository) VotePost(userID, postID, voteType int) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Validate voteType
+	if voteType != 1 && voteType != -1 {
+		return fmt.Errorf("invalid vote type: %d", voteType)
+	}
+
+	query := `
+		INSERT INTO votes (user_id, post_id, vote_type, created_at, updated_at)
+		VALUES ($1, $2, $3, NOW(), NOW())
+		ON CONFLICT (user_id, post_id) 
+		DO UPDATE SET vote_type = $3, updated_at = NOW()`
+
+	_, err := repo.DB.Exec(ctx, query, userID, postID, voteType)
+	if err != nil {
+		return fmt.Errorf("failed to vote on post: %w", err)
+	}
+
+	return nil
+}
+
+// RemovePostVote removes a user's vote from a post
+func (repo *Repository) RemovePostVote(userID, postID int) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		DELETE FROM votes
+		WHERE user_id = $1 AND post_id = $2`
+
+	commandTag, err := repo.DB.Exec(ctx, query, userID, postID)
+	if err != nil {
+		return fmt.Errorf("failed to remove vote from post: %w", err)
+	}
+
+	if commandTag.RowsAffected() == 0 {
+		return fmt.Errorf("no vote found for user %d on post %d", userID, postID)
+	}
+
+	return nil
+}
+
+// VoteComment creates/updates a vote on a comment
+func (repo *Repository) VoteComment(userID, commentID, voteType int) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Validate voteType
+	if voteType != 1 && voteType != -1 {
+		return fmt.Errorf("invalid vote type: %d", voteType)
+	}
+
+	query := `
+		INSERT INTO votes (user_id, comment_id, vote_type, created_at, updated_at)
+		VALUES ($1, $2, $3, NOW(), NOW())
+		ON CONFLICT (user_id, comment_id) 
+		DO UPDATE SET vote_type = $3, updated_at = NOW()`
+
+	_, err := repo.DB.Exec(ctx, query, userID, commentID, voteType)
+	if err != nil {
+		return fmt.Errorf("failed to vote on comment: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveCommentVote removes a user's vote from a comment
+func (repo *Repository) RemoveCommentVote(userID, commentID int) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	query := `
+		DELETE FROM votes
+		WHERE user_id = $1 AND comment_id = $2`
+
+	commandTag, err := repo.DB.Exec(ctx, query, userID, commentID)
+	if err != nil {
+		return fmt.Errorf("failed to remove vote from comment: %w", err)
+	}
+
+	if commandTag.RowsAffected() == 0 {
+		return fmt.Errorf("no vote found for user %d on comment %d", userID, commentID)
+	}
+
+	return nil
+}
+
+// GetUserVoteOnPost gets current user's vote on a specific post, if any
+func (repo *Repository) GetUserVoteOnPost(userID, postID int) (*int, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var voteType int
+	query := `
+		SELECT vote_type
+		FROM votes
+		WHERE user_id = $1 AND post_id = $2`
+
+	err := repo.DB.QueryRow(ctx, query, userID, postID).Scan(&voteType)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil // No vote found
+		}
+		return nil, fmt.Errorf("failed to get user vote on post: %w", err)
+	}
+
+	return &voteType, nil
+}
+
+// GetUserVoteOnComment gets current user's vote on a specific comment, if any
+func (repo *Repository) GetUserVoteOnComment(userID, commentID int) (*int, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var voteType int
+	query := `
+		SELECT vote_type
+		FROM votes
+		WHERE user_id = $1 AND comment_id = $2`
+
+	err := repo.DB.QueryRow(ctx, query, userID, commentID).Scan(&voteType)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get user vote on comment: %w", err)
+	}
+
+	return &voteType, nil
 }

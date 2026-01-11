@@ -7,8 +7,8 @@ CREATE TABLE votes (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
-    UNIQUE(user_id, post_id),
-    UNIQUE(user_id, comment_id),
+    UNIQUE(user_id, post_id), -- A user can vote only once per post
+    UNIQUE(user_id, comment_id), -- A user can vote only once per comment
 
     CHECK (
         (post_id IS NOT NULL AND comment_id IS NULL) OR

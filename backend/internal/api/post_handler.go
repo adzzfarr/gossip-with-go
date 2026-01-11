@@ -33,9 +33,15 @@ func (handler *PostHandler) GetPostsByTopicID(ctx *gin.Context) {
 		return
 	}
 
-	// Call service layer
-	posts, err := handler.PostService.GetPostsByTopicID((topicID))
+	// Get userID from context (nil if unauthenticated)
+	var userID *int
+	if uid, ok := ctx.Get("userID"); ok {
+		uidInt := uid.(int)
+		userID = &uidInt
+	}
 
+	// Call service layer
+	posts, err := handler.PostService.GetPostsByTopicID(topicID, userID)
 	if err != nil {
 		// Send ISE status to client
 		ctx.JSON(
@@ -60,7 +66,13 @@ func (handler *PostHandler) GetPostByID(ctx *gin.Context) {
 		return
 	}
 
-	post, err := handler.PostService.GetPostByID(postID)
+	var userID *int
+	if uid, ok := ctx.Get("userID"); ok {
+		uidInt := uid.(int)
+		userID = &uidInt
+	}
+
+	post, err := handler.PostService.GetPostByID(postID, userID)
 	if err != nil {
 		// Check for not found errors (Not Found 404)
 		if strings.Contains(err.Error(), "not found") {

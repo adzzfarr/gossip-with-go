@@ -22,6 +22,22 @@ func (topicService *TopicService) GetAllTopics() ([]*data.Topic, error) {
 	return topicService.Repo.GetAllTopics()
 }
 
+// GetTopicByID retrieves a specific topic by its ID
+func (topicService *TopicService) GetTopicByID(topicID int) (*data.Topic, error) {
+	// Validate topic ID
+	if topicID <= 0 {
+		return nil, fmt.Errorf("invalid topic ID: %d", topicID)
+	}
+
+	// Delegate call to repository layer
+	topic, err := topicService.Repo.GetTopicByID(topicID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get topic by ID %d: %w", topicID, err)
+	}
+
+	return topic, nil
+}
+
 // CreateTopic creates a new topic
 func (topicService *TopicService) CreateTopic(title, description string, userID int) (*data.Topic, error) {
 	// Title Validation
