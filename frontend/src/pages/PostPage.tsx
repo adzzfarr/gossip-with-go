@@ -8,6 +8,7 @@ import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Dia
 import { ArrowBack, Delete, Edit } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 import Username from "../components/Username";
+import VoteButtons from "../components/VoteButtons";
 
 export default function PostPage() {
     const { postID } = useParams<{ postID: string}>();
@@ -196,77 +197,109 @@ export default function PostPage() {
                     mb: 4,
                 }}
             >
-                <Box
-                    sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 2,
-                    }}
-                >
-                    <Typography 
-                        variant="h4" 
-                        component="h1" 
-                        gutterBottom
+                <Box>
+                    {/* Header */}
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            mb: 2,
+                        }}
                     >
-                        {currentPost.title}
-                    </Typography>
-
-                    {/* Edit and Delete Buttons for author */}
-                    {isAuthor && (
-                        <Box 
-                            sx={{
-                                display: 'flex',
-                                gap: 1
-                            }}
+                        <Typography 
+                            variant="h4" 
+                            component="h1" 
+                            gutterBottom
                         >
-                            <Button
-                                startIcon={<Edit />}
-                                variant="outlined"
-                                onClick={() => navigate(`/posts/${currentPost.postID}/edit`)}
-                                size="small"
-                            >
-                                Edit
-                            </Button>
+                            {currentPost.title}
+                        </Typography>
 
-                            <Button
-                                startIcon={<Delete />}
-                                variant="outlined"
-                                color="error"
-                                onClick={() => setDeletePostDialogOpen(true)}
-                                disabled={postSubmitting}
-                                size="small"
+                        {/* Edit and Delete Buttons for author */}
+                        {isAuthor && (
+                            <Box 
+                                sx={{
+                                    display: 'flex',
+                                    gap: 1
+                                }}
                             >
-                                Delete
-                            </Button>
-                        </Box>
-                    )}
-                </Box>
+                                <Button
+                                    startIcon={<Edit />}
+                                    variant="outlined"
+                                    onClick={() => navigate(`/posts/${currentPost.postID}/edit`)}
+                                    size="small"
+                                >
+                                    Edit
+                                </Button>
 
-                <Box
-                    sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                    }}
-                >
-                    <Username
-                        username={currentPost.username || 'Unknown'}
-                        userID={currentPost.createdBy}
-                        variant="body2"
-                        color="text.secondary"
-                    />
-                    
-                    <Typography variant="body2" color="text.secondary">
-                        {new Date(currentPost.createdAt).toLocaleString()}
+                                <Button
+                                    startIcon={<Delete />}
+                                    variant="outlined"
+                                    color="error"
+                                    onClick={() => setDeletePostDialogOpen(true)}
+                                    disabled={postSubmitting}
+                                    size="small"
+                                >
+                                    Delete
+                                </Button>
+                            </Box>
+                        )}
+                    </Box>
+
+                    {/* Metadata */}
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.5,
+                            mb: 2
+                        }}
+                    >
+                        <Typography variant="body2" color="text.secondary">
+                            Posted by
+                        </Typography>
+                        <Username
+                            username={currentPost.username || 'Unknown'}
+                            userID={currentPost.createdBy}
+                            variant="body2"
+                            color="text.secondary"
+                        />
+                        <Typography variant="body2" color="text.secondary">•</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            {new Date(currentPost.createdAt).toLocaleString()}
+                        </Typography>
+                    </Box>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    {/* Post Content */}
+                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {currentPost.content}
                     </Typography>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    {/* Vote Buttons */}
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                        }}
+                    >
+                        <VoteButtons 
+                            postID={currentPost.postID}
+                            initialVoteCount={currentPost.voteCount || 0}
+                            initialUserVote={currentPost.userVote}
+                            orientation="horizontal"
+                            size="small"
+                        />
+                    </Box>
                 </Box>
+            
+                
 
-                <Divider sx={{ my: 2 }} />
 
-                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {currentPost.content}
-                </Typography>
             </Paper>
 
             {/* Comments Section */}
@@ -278,40 +311,6 @@ export default function PostPage() {
                 >
                     Comments
                 </Typography>
-
-                {/* Add Comment Form */}
-                <Paper
-                    elevation={1}
-                    sx={{ 
-                        p: 2, 
-                        mb: 3 
-                    }}
-                >
-                    <form onSubmit={handleSubmitComment}>
-                        <TextField
-                            fullWidth
-                            multiline
-                            minRows={3}
-                            placeholder="Write a comment..."
-                            value={commentContent}
-                            onChange={handleCommentChange}
-                            disabled={commentSubmitting}
-                            sx={{ mb: 2 }}
-                        />
-                        
-                        {commentSubmitError && (
-                            <Alert severity="error" sx={{ mb: 2 }}>{commentSubmitError}</Alert>
-                        )}
-
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            disabled={commentSubmitting || !commentContent.trim()}
-                        >
-                            {commentSubmitting ? <CircularProgress size={24} /> : 'Post Comment'}
-                        </Button>
-                    </form>
-                </Paper>
 
                 {commentsError && (
                     <Alert severity="error" sx={{ mb: 2 }}>
@@ -327,6 +326,7 @@ export default function PostPage() {
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: 2,
+                                mb: 2,
                             }}
                         >
                             {comments.map((comment) => {
@@ -441,6 +441,40 @@ export default function PostPage() {
                         </Box>
                     )
                 }
+
+                {/* Add Comment Form */}
+                <Paper
+                    elevation={1}
+                    sx={{ 
+                        p: 2, 
+                        mb: 3 
+                    }}
+                >
+                    <form onSubmit={handleSubmitComment}>
+                        <TextField
+                            fullWidth
+                            multiline
+                            minRows={3}
+                            placeholder="Write a comment..."
+                            value={commentContent}
+                            onChange={handleCommentChange}
+                            disabled={commentSubmitting}
+                            sx={{ mb: 2 }}
+                        />
+                        
+                        {commentSubmitError && (
+                            <Alert severity="error" sx={{ mb: 2 }}>{commentSubmitError}</Alert>
+                        )}
+
+                        <Button
+                            type="submit"
+                            variant="contained"
+                            disabled={commentSubmitting || !commentContent.trim()}
+                        >
+                            {commentSubmitting ? <CircularProgress size={24} /> : 'Post Comment'}
+                        </Button>
+                    </form>
+                </Paper>
             </Box>
 
             {/* Delete Comment Confirmation Dialog */}

@@ -1,6 +1,6 @@
 // Redux slice for topics state management
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { Post } from '../types';
+import type { Post, VoteResponse } from '../types';
 import { apiClient } from '../api/client';
 
 interface PostsState {
@@ -96,6 +96,29 @@ export const deletePost = createAsyncThunk(
             return postID;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to delete post');
+        }
+    }
+)
+
+// Vote on post
+export const voteOnPost = createAsyncThunk(
+    'posts/voteOnPost',
+    async (
+        { postID, voteType }: { postID: number; voteType: 1 | -1 | null }, 
+        { rejectWithValue }
+) => {
+        try {
+            const response = await apiClient.post<VoteResponse>(
+                `/posts/${postID}/vote`,
+                { voteType }
+            );
+
+            return {
+                postID,
+                ...response.data,
+            }
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to vote on post');
         }
     }
 )
@@ -250,6 +273,41 @@ const postsSlice = createSlice({
             (state, action) => {
                 state.submitting = false;
                 state.submitError = action.payload as string;
+            }
+        );
+
+        // Vote on post
+        builder.addCase(
+            voteOnPost.pending,
+            (state) => {
+                state.error = null;
+            }
+        );
+
+        builder.addCase(
+            voteOnPost.fulfilled,
+            (state, action) => {
+                const { postID, newVoteCount, userVote } = action.payload;
+
+                // Update post in posts list
+                const post = state.posts.find(p => p.postID === postID);
+                if (post) {
+                    post.voteCount = newVoteCount;
+                    post.userVote = userVote as 1 | -1 | null;
+                }
+
+                // Update current post if necessary
+                if (state.currentPost && state.currentPost.postID === postID) {
+                    state.currentPost.voteCount = newVoteCount;
+                    state.currentPost.userVote = userVote as 1 | -1 | null;
+                }
+            }
+        );
+        
+        builder.addCase(
+            voteOnPost.rejected,
+            (state, action) => {
+                state.error = action.payload as string;
             }
         );
     }
