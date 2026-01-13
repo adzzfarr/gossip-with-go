@@ -28,6 +28,8 @@ export interface Post {
     username: string;
     createdAt: string;
     updatedAt: string;
+    voteCount: number;
+    userVote?: 1 | -1 | null;
 }
 
 export interface Comment {
@@ -39,6 +41,8 @@ export interface Comment {
     username: string;
     createdAt: string;
     updatedAt: string;
+    voteCount: number;
+    userVote?: 1 | -1 | null;
 }
 
 // Auth types for login/register 
@@ -94,4 +98,14 @@ export interface CreateCommentRequest {
 
 export interface UpdateCommentRequest {
     content: string;
+}
+
+export interface VoteRequest {
+    voteType: 1 | -1;
+}
+
+export interface VoteResponse {
+    message: string;
+    newVoteCount: number;
+    userVote: number | null;
 }

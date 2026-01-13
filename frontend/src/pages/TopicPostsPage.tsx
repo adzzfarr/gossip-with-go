@@ -2,11 +2,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect, useState } from "react";
 import { fetchPostsByTopic } from "../features/postsSlice";
-import { Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Grid, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
 import { Add, ArrowBack, Clear, Delete, Edit, Search } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 import Username from "../components/Username";
-import { deleteTopic } from "../features/topicsSlice";
+import { deleteTopic, fetchTopicByID } from "../features/topicsSlice";
+import PostsList from "../components/PostsList";
 
 export default function TopicPostsPage() {
     const { topicID } = useParams<{ topicID: string }>();
@@ -14,7 +15,7 @@ export default function TopicPostsPage() {
     const navigate = useNavigate();
 
     const { posts, loading: postsLoading, error: postsError } = useAppSelector(state => state.posts);
-    const { topics, submitting: topicSubmitting, submitError } = useAppSelector(state => state.topics);
+    const { topics, loading: topicLoading, submitting: topicSubmitting, submitError } = useAppSelector(state => state.topics);
     const { userID } = useAppSelector(state => state.auth);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -28,7 +29,10 @@ export default function TopicPostsPage() {
 
     useEffect(() => {
         if (topicID) {
-            dispatch(fetchPostsByTopic(parseInt(topicID)));
+            const id = parseInt(topicID);
+
+            dispatch(fetchTopicByID(id));
+            dispatch(fetchPostsByTopic(id));
         }
     }, [dispatch, topicID]);
 
@@ -58,7 +62,7 @@ export default function TopicPostsPage() {
     }
 
 
-    if (postsLoading) {
+    if (topicLoading || postsLoading) {
         return (
             <Container 
                 sx={{
@@ -238,7 +242,7 @@ export default function TopicPostsPage() {
                         <Typography variant="h5" component="h2">
                             Posts
                         </Typography>
-                        
+
                         {/* Search Bar */}
                         <TextField 
                             size="small"
@@ -299,107 +303,8 @@ export default function TopicPostsPage() {
                         }
                     </Alert>
                 )
-                : (
-                    <Grid container spacing={3}>
-                        {filteredPosts.map(
-                            (post) => (
-                                <Grid
-                                    size={{
-                                        xs: 12,
-                                        sm: 6,
-                                        md: 4,
-                                    }}
-                                    key={post.postID}
-                                >
-                                    <Card 
-                                        variant="outlined"
-                                        sx={{
-                                            height: '100%',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                        }}
-                                    > 
-                                        <CardActionArea 
-                                            onClick={() => navigate(`/posts/${post.postID}`)}
-                                            sx={{
-                                                height: '100%',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'stretch',
-                                            }}    
-                                        >
-                                            <CardContent
-                                                sx={{
-                                                    flex: 1,
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                }}
-                                            >
-                                                <Typography
-                                                    variant="h6"
-                                                    component="h2"
-                                                    fontWeight="bold"
-                                                    gutterBottom
-                                                >
-                                                    {post.title}
-                                                </Typography>
-
-                                                <Typography
-                                                    variant="body2"
-                                                    color="text.secondary"
-                                                    sx={{
-                                                        display: '-webkit-box',
-                                                        WebkitLineClamp: 3,
-                                                        WebkitBoxOrient: 'vertical',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        mb: 2,
-                                                        flex: 1,
-                                                    }}
-                                                >
-                                                    {post.content}
-                                                </Typography>
-
-                                                <Box
-                                                    sx={{
-                                                        display: 'flex',
-                                                        gap: 0.5,
-                                                        alignItems: 'center',
-                                                        mt: 'auto',
-                                                    }}
-                                                >
-                                                    <Box
-                                                        sx={{
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: 0.5
-                                                        }}
-                                                    >
-                                                        <Typography variant="caption" color="text.secondary">
-                                                            Posted by
-                                                        </Typography>
-
-                                                        <Username
-                                                            username={post.username || "Unknown"}
-                                                            userID={post.createdBy}
-                                                            variant="caption"
-                                                            color="text.secondary"
-                                                        />
-                                                    </Box>
-                                                    <Typography variant="caption" color="text.secondary">•</Typography>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {new Date(post.createdAt).toLocaleString()}
-                                                    </Typography>
-                                                </Box>
-                                            </CardContent>
-                                        </CardActionArea>
-                                    </Card>
-                                </Grid>
-                                
-                            )
-                        )}
-                    </Grid>
-                )}
+                : (<PostsList posts={filteredPosts} />)
+                }
             </Box>
 
             {/* Delete Confirmation Dialog */}

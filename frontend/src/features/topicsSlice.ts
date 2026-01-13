@@ -32,6 +32,18 @@ export const fetchTopics = createAsyncThunk(
     }
 )
 
+export const fetchTopicByID = createAsyncThunk(
+    'topics/fetchTopicByID',
+    async (topicID: number, { rejectWithValue }) => {
+        try {
+            const response = await apiClient.get<Topic>(`/topics/${topicID}`);
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to fetch topic');
+        }
+    }
+)
+
 // Create topic
 export const createTopic = createAsyncThunk(
     'topics/createTopic',
@@ -119,6 +131,36 @@ const topicsSlice = createSlice({
 
         builder.addCase(
             fetchTopics.rejected, 
+            (state, action) => {
+                state.loading = false;
+                state.error = action.payload as string;
+            }
+        );
+
+        // Fetch topic by ID
+        builder.addCase(
+            fetchTopicByID.pending,
+            (state) => {
+                state.loading = true;
+                state.error = null;
+            }
+        );
+
+        builder.addCase(
+            fetchTopicByID.fulfilled,
+            (state, action: PayloadAction<Topic>) => {
+                state.loading = false;
+                const index = state.topics.findIndex(topic => topic.topicID === action.payload.topicID);
+                if (index === -1) {
+                    state.topics.push(action.payload);
+                } else {
+                    state.topics[index] = action.payload;
+                }
+            }
+        );
+
+        builder.addCase(
+            fetchTopicByID.rejected,
             (state, action) => {
                 state.loading = false;
                 state.error = action.payload as string;

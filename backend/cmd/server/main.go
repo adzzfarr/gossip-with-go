@@ -74,17 +74,21 @@ func main() {
 	// Register API Routes
 	v1 := router.Group("/api/v1")
 	{
-		// Public Routes (No Auth Required)
-		v1.POST("/users", userHandler.RegisterUser)
+		// Public Routes - No Auth Required
+		v1.POST("/register", userHandler.RegisterUser)
 		v1.POST("/login", loginHandler.LoginUser)
 
 		v1.GET("/topics", topicHandler.GetAllTopics)
 		v1.GET("/topics/:topicID", topicHandler.GetTopicByID)
 
-		v1.GET("/topics/:topicID/posts", postHandler.GetPostsByTopicID)
-		v1.GET("/posts/:postID", postHandler.GetPostByID)
-
-		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
+		// Optional Auth Routes - Guests can view, Authenticated users get extra info
+		optional := v1.Group("")
+		optional.Use(api.OptionalAuthMiddleware(jwtService))
+		{
+			optional.GET("/topics/:topicID/posts", postHandler.GetPostsByTopicID)
+			optional.GET("/posts/:postID", postHandler.GetPostByID)
+			optional.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
+		}
 
 		// Protected Routes (Auth Required)
 		protected := v1.Group("")
