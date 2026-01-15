@@ -1,6 +1,6 @@
 // Redux slice for comments state management
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { Comment } from '../types'; 
+import type { VoteResponse, Comment } from '../types'; 
 import { apiClient } from '../api/client';
 
 interface CommentsState {
@@ -79,6 +79,32 @@ export const deleteComment = createAsyncThunk(
             return commentID;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to delete comment');
+        }
+    }
+)
+
+// Vote on Comment
+export const voteOnComment = createAsyncThunk(
+    'comments/voteOnComment',
+    async (
+        { commentID, voteType } : {
+            commentID: number;
+            voteType: 1 | -1;
+        },
+        { rejectWithValue }
+    ) => {
+        try {
+            const response = await apiClient.post<VoteResponse>(
+                `/comments/${commentID}/vote`,
+                { voteType }
+            );
+
+            return {
+                commentID,
+                ...response.data,
+            }
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to vote on comment');
         }
     }
 )
@@ -195,6 +221,33 @@ const commentsSlice = createSlice({
             (state, action) => {
                 state.submitting = false;
                 state.submitError = action.payload as string;
+            }
+        );
+
+        // Vote on comment
+        builder.addCase(
+            voteOnComment.pending,
+            (state) => {
+                state.error = null;
+            }
+        );
+
+        builder.addCase(
+            voteOnComment.fulfilled,
+            (state, action) => {
+                const { commentID, newVoteCount, userVote } = action.payload;
+                const comment = state.comments.find(c => c.commentID === commentID);
+                if (comment) {
+                    comment.voteCount = newVoteCount;
+                    comment.userVote = userVote as 1 | -1 | null;
+                }
+            }
+        );
+
+        builder.addCase(
+            voteOnComment.rejected,
+            (state, action) => {
+                state.error = action.payload as string;
             }
         );
     },

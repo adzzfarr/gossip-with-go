@@ -296,10 +296,6 @@ export default function PostPage() {
                         />
                     </Box>
                 </Box>
-            
-                
-
-
             </Paper>
 
             {/* Comments Section */}
@@ -429,9 +425,29 @@ export default function PostPage() {
                                                     </Box>
                                                 )
                                                 : (
-                                                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                                                        {comment.content}
-                                                    </Typography>
+                                                    <>
+                                                        <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                                                            {comment.content}
+                                                        </Typography>
+
+                                                        <Divider sx={{ my: 2 }}/>
+
+                                                        <Box
+                                                            sx={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: 1,
+                                                            }}
+                                                        >
+                                                            <VoteButtons
+                                                                commentID={comment.commentID} 
+                                                                initialVoteCount={comment.voteCount || 0}
+                                                                initialUserVote={comment.userVote}
+                                                                orientation="horizontal"
+                                                                size="small"    
+                                                            />
+                                                        </Box>
+                                                    </>
                                                 )
                                             }
                                         </CardContent>

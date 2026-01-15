@@ -25,7 +25,6 @@ func (handler *CommentHandler) GetCommentsByPostID(ctx *gin.Context) {
 	// Get postID from URL parameter
 	postIDStr := ctx.Param("postID")
 	postID, err := strconv.Atoi(postIDStr)
-
 	if err != nil {
 		ctx.JSON(
 			http.StatusBadRequest,
