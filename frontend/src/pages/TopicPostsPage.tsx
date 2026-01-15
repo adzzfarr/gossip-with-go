@@ -2,7 +2,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect, useState } from "react";
 import { fetchPostsByTopic } from "../features/postsSlice";
-import { Alert, Box, Button, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
 import { Add, ArrowBack, Clear, Delete, Edit, Search } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 import Username from "../components/Username";
@@ -142,9 +142,25 @@ export default function TopicPostsPage() {
                         mb: 2,
                     }}
                 >
-                    <Typography variant="h4" component="h1">
-                        {topic.title}
-                    </Typography>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 2,
+                        }}
+                    >
+                        <Typography variant="h4" component="h1">
+                            {topic.title}
+                        </Typography>
+                        <Chip
+                            label={`💬 ${posts.length} ${posts.length === 1 ? 'post' : 'posts'}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                                p: 0.5,
+                            }}
+                        />
+                    </Box>
 
                     {/* Edit and Delete Buttons */}
                     {isAuthor && (
@@ -208,6 +224,7 @@ export default function TopicPostsPage() {
                     <Typography variant="body2" color="text.secondary">
                         {new Date(topic.createdAt).toLocaleString()}
                     </Typography>
+
                 </Box>
 
                 <Divider sx={{ my: 2 }} />

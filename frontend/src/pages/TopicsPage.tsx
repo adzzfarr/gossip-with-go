@@ -1,15 +1,17 @@
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect, useState } from "react";
-import { fetchTopics } from "../features/topicsSlice";
+import { fetchTopics, setTopicsSortBy } from "../features/topicsSlice";
 import { Alert, Box, Button, CircularProgress, Container, IconButton, InputAdornment, TextField, Typography } from "@mui/material";
 import { Add, Clear, Search } from "@mui/icons-material";
 import TopicsList from "../components/TopicsList";
+import SortDropdown from "../components/SortDropdown";
 
 export default function TopicsPage() {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
-    const { topics, loading, error } = useAppSelector(state => state.topics);
+    const { topics, loading, error, sortBy } = useAppSelector(state => state.topics);
+    const { isAuthenticated } = useAppSelector(state => state.auth);
 
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -17,9 +19,14 @@ export default function TopicsPage() {
         setSearchQuery('');
     }
 
+    const handleSortChange = (newSort: string) => {
+        dispatch(setTopicsSortBy(newSort));
+        dispatch(fetchTopics(newSort));
+    }
+
     useEffect(() => {
-        dispatch(fetchTopics());
-    }, [dispatch]);
+        dispatch(fetchTopics(sortBy));
+    }, [dispatch, sortBy]);
 
     const filteredTopics = topics.filter(
         topic => {
@@ -59,15 +66,13 @@ export default function TopicsPage() {
             }}
             maxWidth="lg"
         >
-            {/* Header (Search Bar + New Topic) */}
+            {/* Header */}
             <Box
                 sx={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     mb: 3,
-                    gap: 2,
-                    flexWrap: 'wrap',
                 }}
             >
                 <Typography 
@@ -78,53 +83,64 @@ export default function TopicsPage() {
                     Discussion Topics
                 </Typography>
 
-                <Box
-                    sx={{
-                        display: 'flex',
-                        gap: 2,
-                        alignItems: 'center',
-                        flex: 1,
-                        maxWidth: 600,
-                    }}
-                >
-                    {/* Search Bar */}
-                    <TextField 
-                        size="small"
-                        fullWidth
-                        placeholder="Search Topics..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        slotProps={{
-                            input: {
-                                'startAdornment': (
-                                    <InputAdornment position="start">
-                                        <Search color="action"/>
-                                    </InputAdornment>
-                                ),
-                                'endAdornment': searchQuery && (
-                                    <InputAdornment position="end">
-                                        <IconButton
-                                            size="small"
-                                            onClick={handleClearSearch}
-                                            title="Clear Search"
-                                        >
-                                            <Clear />
-                                        </IconButton>
-                                    </InputAdornment>
-                                )
-                            }
-                        }}
-                    />
-
+                {isAuthenticated && (
                     <Button
                         variant="contained"
                         startIcon={<Add />}
                         onClick={() => navigate('/topics/create')}
                         sx={{ whiteSpace: 'nowrap' }}
+                        
                     >
                         New Topic
                     </Button>
-                </Box>
+                )}
+            </Box>
+
+            {/* Search and Sort Controls */}
+            <Box
+                sx={{
+                    display: 'flex',
+                    gap: 2,
+                    mb: 3,
+                }}
+            >
+                <TextField 
+                    size="small"
+                    fullWidth
+                    placeholder="Search Topics..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    slotProps={{
+                        input: {
+                            'startAdornment': (
+                                <InputAdornment position="start">
+                                    <Search color="action"/>
+                                </InputAdornment>
+                            ),
+                            'endAdornment': searchQuery && (
+                                <InputAdornment position="end">
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleClearSearch}
+                                        title="Clear Search"
+                                    >
+                                        <Clear />
+                                    </IconButton>
+                                </InputAdornment>
+                            )
+                        }
+                    }}
+                />
+
+                <SortDropdown 
+                    value={sortBy}
+                    onChange={handleSortChange}
+                    options={[
+                        { value: 'newest', label: 'Newest' },
+                        { value: 'oldest', label: 'Oldest' },
+                        { value: 'most_posts', label: 'Most Posts' },
+                    ]}
+                />
             </Box>
             
             {searchQuery && (

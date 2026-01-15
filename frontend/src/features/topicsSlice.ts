@@ -9,6 +9,7 @@ interface TopicsState {
     error: string | null;
     submitting: boolean;
     submitError: string | null;
+    sortBy: string;
 }
 
 const initialState: TopicsState = {
@@ -17,14 +18,18 @@ const initialState: TopicsState = {
     error: null,
     submitting: false,
     submitError: null,
+    sortBy: 'newest',
 }
 
 // Fetch topics
 export const fetchTopics = createAsyncThunk(
     `topics/fetchTopics`,
-    async (_, { rejectWithValue }) => {
+    async (
+        sortBy: string = 'newest', 
+        { rejectWithValue }
+    ) => {
         try {
-            const response = await apiClient.get<Topic[]>('/topics');
+            const response = await apiClient.get<Topic[]>(`/topics?sort=${sortBy}`);
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to fetch topics');
@@ -110,6 +115,9 @@ const topicsSlice = createSlice({
         clearError: (state) => {
             state.error = null;
             state.submitError = null;
+        },
+        setTopicsSortBy: (state, action) => {
+            state.sortBy = action.payload;
         },
     },
     extraReducers: (builder) => {
@@ -248,5 +256,5 @@ const topicsSlice = createSlice({
     }
 })
 
-export const { clearError } = topicsSlice.actions;
+export const { clearError, setTopicsSortBy } = topicsSlice.actions;
 export default topicsSlice.reducer;

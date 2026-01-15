@@ -71,7 +71,7 @@ function TopicCard({ topic }: { topic: Topic }) {
                             }}
                         >
                             <Typography variant="caption" color="text.secondary">
-                                By
+                                Started by
                             </Typography>
                             <Username
                                 username={topic.username}
@@ -79,11 +79,19 @@ function TopicCard({ topic }: { topic: Topic }) {
                                 variant="caption"
                                 color="text.secondary"
                             />
+                            <Typography variant="caption" color="text.secondary">•</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                {new Date(topic.createdAt).toLocaleDateString()}
+                            </Typography>
                         </Box>
-                        <Typography variant="caption" color="text.secondary">
-                            {new Date(topic.createdAt).toLocaleDateString()}
-                        </Typography>
                     </Box>
+
+                    <Typography 
+                        variant="caption" 
+                        color="text.secondary"
+                    >
+                        {topic.postCount} {topic.postCount === 1 ? 'post' : 'posts'}
+                    </Typography>
                 </CardContent>
             </CardActionArea>
         </Card>
