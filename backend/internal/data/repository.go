@@ -19,15 +19,40 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 }
 
 // GetAllTopics fetches all topics from the database
-func (repo *Repository) GetAllTopics() ([]*Topic, error) {
+func (repo *Repository) GetAllTopics(sortBy string) ([]*Topic, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensures context is cleaned up when function returns
 
-	query := `
-        SELECT t.topic_id, t.title, t.description, t.created_by, u.username, t.created_at, t.updated_at
+	// Determine ORDER BY based on sortBy
+	var orderBy string
+	switch sortBy {
+	case "newest":
+		orderBy = "t.created_at DESC"
+	case "oldest":
+		orderBy = "t.created_at ASC"
+	case "most_posts":
+		orderBy = "post_count DESC, t.created_at DESC"
+	default:
+		orderBy = "t.created_at DESC" // Default sorting
+	}
+
+	query := fmt.Sprintf(`
+		SELECT 
+			t.topic_id, 
+			t.title, 
+			t.description, 
+			t.created_by, 
+			u.username, 
+			t.created_at, 
+			t.updated_at,
+			COUNT(p.post_id) AS post_count
         FROM topics t
         JOIN users u ON t.created_by = u.user_id
-        ORDER BY t.created_at DESC`
+        LEFT JOIN posts p ON t.topic_id = p.topic_id
+        GROUP BY t.topic_id, u.username
+        ORDER BY %s`,
+		orderBy,
+	)
 
 	rows, err := repo.DB.Query(ctx, query)
 	if err != nil {
@@ -49,6 +74,7 @@ func (repo *Repository) GetAllTopics() ([]*Topic, error) {
 			&t.Username,
 			&t.CreatedAt,
 			&t.UpdatedAt,
+			&t.PostCount,
 		)
 
 		if err != nil {
@@ -206,11 +232,29 @@ func (repo *Repository) CreateTopic(title, description string, userID int) (*Top
 }
 
 // GetPostsByTopicID fetches all posts for a given topic ID
-func (repo *Repository) GetPostsByTopicID(topicID int, userID *int) ([]*Post, error) {
+func (repo *Repository) GetPostsByTopicID(topicID int, userID *int, sortBy string) ([]*Post, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	query := `
+	var orderBy string
+	switch sortBy {
+	case "hot":
+		// Hot Score: (votes) / (age in hours + 2)^1.5
+		orderBy = `(
+			CAST(p.vote_count AS FLOAT) /
+			POWER((EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600) + 2, 1.5)
+		) DESC`
+	case "newest":
+		orderBy = "p.created_at DESC"
+	case "oldest":
+		orderBy = "p.created_at ASC"
+	case "most_voted":
+		orderBy = "p.vote_count DESC, p.created_at DESC"
+	default:
+		orderBy = "p.created_at DESC"
+	}
+
+	query := fmt.Sprintf(`
 		SELECT 
 			p.post_id, 
 			p.topic_id, 
@@ -233,7 +277,9 @@ func (repo *Repository) GetPostsByTopicID(topicID int, userID *int) ([]*Post, er
 		JOIN users u ON p.created_by = u.user_id
 		JOIN topics t ON p.topic_id = t.topic_id
 		WHERE p.topic_id = $1
-		ORDER BY p.created_at DESC`
+		ORDER BY %s`,
+		orderBy,
+	)
 
 	rows, err := repo.DB.Query(ctx, query, topicID, userID)
 	if err != nil {
@@ -328,11 +374,29 @@ func (repo *Repository) GetPostByID(postID int, userID *int) (*Post, error) {
 }
 
 // GetCommentsByPostID fetches all comments for a given post ID
-func (repo *Repository) GetCommentsByPostID(postID int, userID *int) ([]*Comment, error) {
+func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy string) ([]*Comment, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	query := `
+	var orderBy string
+	switch sortBy {
+	case "hot":
+		// Hot Score: (votes) / (age in hours + 2)^1.5
+		orderBy = `(
+			CAST(c.vote_count AS FLOAT) /
+			POWER((EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 3600) + 2, 1.5)
+		) DESC`
+	case "newest":
+		orderBy = "c.created_at DESC"
+	case "oldest":
+		orderBy = "c.created_at ASC"
+	case "most_voted":
+		orderBy = "c.vote_count DESC, c.created_at DESC"
+	default:
+		orderBy = "c.created_at DESC"
+	}
+
+	query := fmt.Sprintf(`
 		SELECT 
 			c.comment_id, 
 			c.post_id, 
@@ -352,7 +416,9 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int) ([]*Comment
 		FROM comments c
 		JOIN users u ON c.created_by = u.user_id
 		WHERE c.post_id = $1
-		ORDER BY c.created_at DESC`
+		ORDER BY %s`,
+		orderBy,
+	)
 
 	rows, err := repo.DB.Query(ctx, query, postID, userID)
 	if err != nil {

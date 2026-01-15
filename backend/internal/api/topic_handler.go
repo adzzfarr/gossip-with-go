@@ -21,8 +21,11 @@ func NewTopicHandler(topicService *service.TopicService) *TopicHandler {
 
 // GetAllTopics handles GET requests for topics
 func (handler *TopicHandler) GetAllTopics(ctx *gin.Context) {
+	// Get sortBy from query string (default: "newest")
+	sortBy := ctx.DefaultQuery("sort", "newest")
+
 	// Call service layer
-	topics, err := handler.TopicService.GetAllTopics()
+	topics, err := handler.TopicService.GetAllTopics(sortBy)
 
 	if err != nil {
 		// Send ISE status to client

@@ -39,8 +39,11 @@ func (handler *CommentHandler) GetCommentsByPostID(ctx *gin.Context) {
 		userID = &uidInt
 	}
 
+	// Get sortBy from query string (default: "newest")
+	sortBy := ctx.DefaultQuery("sort", "newest")
+
 	// Call service layer
-	comments, err := handler.CommentService.GetCommentsByPostID(postID, userID)
+	comments, err := handler.CommentService.GetCommentsByPostID(postID, userID, sortBy)
 
 	if err != nil {
 		// Send ISE status to client

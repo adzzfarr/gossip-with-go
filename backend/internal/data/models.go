@@ -22,6 +22,7 @@ type Topic struct {
 	Username    string    `json:"username" db:"username"`
 	CreatedAt   time.Time `json:"createdAt" db:"created_at"`
 	UpdatedAt   time.Time `json:"updatedAt" db:"updated_at"`
+	PostCount   int       `json:"postCount" db:"post_count"`
 }
 
 // Post struct

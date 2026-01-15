@@ -44,7 +44,7 @@ func TestGetAllTopicsIntegration(t *testing.T) {
 	}
 
 	// Test Repository Function
-	topics, err := repo.GetAllTopics()
+	topics, err := repo.GetAllTopics("newest")
 	if err != nil {
 		t.Errorf("GetAllTopics failed with error: %v", err)
 	}
@@ -420,7 +420,7 @@ func TestGetPostsByTopicID(t *testing.T) {
 
 	// 1. Successful retrieval of posts
 	t.Run("TestSuccessfulRetrievalOfPosts", func(t *testing.T) {
-		posts, err := repo.GetPostsByTopicID(topicID, nil)
+		posts, err := repo.GetPostsByTopicID(topicID, nil, "newest")
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -450,7 +450,7 @@ func TestGetPostsByTopicID(t *testing.T) {
 
 	// 2. Non-existent topic
 	t.Run("TestNonExistentTopic", func(t *testing.T) {
-		posts, err := repo.GetPostsByTopicID(999999, nil)
+		posts, err := repo.GetPostsByTopicID(999999, nil, "newest")
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -629,7 +629,7 @@ func TestGetCommentsByPostID(t *testing.T) {
 
 	// 1. Successful retrieval of comments
 	t.Run("TestSuccessfulRetrievalOfComments", func(t *testing.T) {
-		comments, err := repo.GetCommentsByPostID(postID, nil)
+		comments, err := repo.GetCommentsByPostID(postID, nil, "newest")
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -659,7 +659,7 @@ func TestGetCommentsByPostID(t *testing.T) {
 
 	// 2. Non-existent post
 	t.Run("TestNonExistentPost", func(t *testing.T) {
-		comments, err := repo.GetCommentsByPostID(999999, nil)
+		comments, err := repo.GetCommentsByPostID(999999, nil, "newest")
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}

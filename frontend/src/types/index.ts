@@ -16,6 +16,7 @@ export interface Topic {
     username: string;
     createdAt: string;
     updatedAt: string;
+    postCount: number;
 }
 
 export interface Post {

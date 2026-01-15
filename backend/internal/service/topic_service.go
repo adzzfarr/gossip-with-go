@@ -18,8 +18,24 @@ func NewTopicService(repo *data.Repository) *TopicService {
 }
 
 // GetAllTopics retrieves all topics
-func (topicService *TopicService) GetAllTopics() ([]*data.Topic, error) {
-	return topicService.Repo.GetAllTopics()
+func (topicService *TopicService) GetAllTopics(sortBy string) ([]*data.Topic, error) {
+	// Validate sortBy
+	validSorts := map[string]bool{
+		"newest":     true,
+		"oldest":     true,
+		"most_posts": true,
+	}
+
+	if sortBy != "" && !validSorts[sortBy] {
+		sortBy = "newest" // Default sort
+	}
+
+	topics, err := topicService.Repo.GetAllTopics(sortBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all topics: %w", err)
+	}
+
+	return topics, nil
 }
 
 // GetTopicByID retrieves a specific topic by its ID

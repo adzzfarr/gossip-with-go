@@ -18,14 +18,26 @@ func NewCommentService(repo *data.Repository) *CommentService {
 }
 
 // GetCommentsByPostID retrieves all comments for a given post
-func (commentService *CommentService) GetCommentsByPostID(postID int, userID *int) ([]*data.Comment, error) {
+func (commentService *CommentService) GetCommentsByPostID(postID int, userID *int, sortBy string) ([]*data.Comment, error) {
 	// Validate post ID
 	if postID <= 0 {
 		return nil, fmt.Errorf("invalid post ID: %d", postID)
 	}
 
+	// sortBy Validation
+	validSorts := map[string]bool{
+		"newest":     true,
+		"oldest":     true,
+		"most_voted": true,
+		"hot":        true,
+	}
+
+	if sortBy != "" && !validSorts[sortBy] {
+		sortBy = "newest"
+	}
+
 	// Delegate call to repository layer
-	comments, err := commentService.Repo.GetCommentsByPostID(postID, userID)
+	comments, err := commentService.Repo.GetCommentsByPostID(postID, userID, sortBy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get comments for post ID %d: %w", postID, err)
 	}

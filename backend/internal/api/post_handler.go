@@ -40,8 +40,11 @@ func (handler *PostHandler) GetPostsByTopicID(ctx *gin.Context) {
 		userID = &uidInt
 	}
 
+	// Get sortBy from query string (default: "newest")
+	sortBy := ctx.DefaultQuery("sort", "newest")
+
 	// Call service layer
-	posts, err := handler.PostService.GetPostsByTopicID(topicID, userID)
+	posts, err := handler.PostService.GetPostsByTopicID(topicID, userID, sortBy)
 	if err != nil {
 		// Send ISE status to client
 		ctx.JSON(
