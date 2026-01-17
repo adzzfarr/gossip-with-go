@@ -1,24 +1,26 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect, useState } from "react";
-import { fetchPostsByTopic } from "../features/postsSlice";
+import { fetchPostsByTopic, setPostsSortBy } from "../features/postsSlice";
 import { Alert, Box, Button, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
 import { Add, ArrowBack, Clear, Delete, Edit, Search } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 import Username from "../components/Username";
 import { deleteTopic, fetchTopicByID } from "../features/topicsSlice";
 import PostsList from "../components/PostsList";
+import SortDropdown from "../components/SortDropdown";
 
 export default function TopicPostsPage() {
     const { topicID } = useParams<{ topicID: string }>();
     const dispatch = useAppDispatch(); 
     const navigate = useNavigate();
 
-    const { posts, loading: postsLoading, error: postsError } = useAppSelector(state => state.posts);
+    const { posts, loading: postsLoading, error: postsError, sortBy } = useAppSelector(state => state.posts);
     const { topics, loading: topicLoading, submitting: topicSubmitting, submitError } = useAppSelector(state => state.topics);
     const { userID } = useAppSelector(state => state.auth);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    
     const [searchQuery, setSearchQuery] = useState('');
 
     // Find current topic from topics list
@@ -32,9 +34,16 @@ export default function TopicPostsPage() {
             const id = parseInt(topicID);
 
             dispatch(fetchTopicByID(id));
-            dispatch(fetchPostsByTopic(id));
+            dispatch(fetchPostsByTopic({ topicID: id, sortBy }));
         }
-    }, [dispatch, topicID]);
+    }, [dispatch, topicID, sortBy]);
+
+    const handleSortChange = (newSort: string) => {
+        dispatch(setPostsSortBy(newSort));
+        if (topicID) {
+            dispatch(fetchPostsByTopic({ topicID: parseInt(topicID), sortBy: newSort }));
+        }
+    }
 
     const filteredPosts = posts.filter(
         post => {
@@ -236,7 +245,7 @@ export default function TopicPostsPage() {
 
             {/* Posts Section */}
             <Box>
-                {/* Header (Search Bar + New Post) */}
+                {/* Search and Sort Controls + New Post */}
                 <Box
                     sx={{
                         display: 'flex',
@@ -287,6 +296,18 @@ export default function TopicPostsPage() {
                                     )
                                 }
                             }}
+                        />
+
+                        {/* Sort Options */}
+                        <SortDropdown 
+                            value={sortBy}
+                            onChange={handleSortChange}
+                            options={[
+                                { value: 'hot', label: 'Hot' },
+                                { value: 'newest', label: 'Newest' },
+                                { value: 'oldest', label: 'Oldest' },
+                                { value: 'most_voted', label: 'Most Voted' },
+                            ]}
                         />
                     </Box>
 

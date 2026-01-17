@@ -10,6 +10,7 @@ interface PostsState {
     error: string | null;
     submitting: boolean;
     submitError: string | null;
+    sortBy: string;
 }
 
 const initialState: PostsState = {
@@ -19,14 +20,21 @@ const initialState: PostsState = {
     error: null,
     submitting: false,
     submitError: null,
+    sortBy: 'hot',
 }
 
 // Fetch posts by topic
 export const fetchPostsByTopic = createAsyncThunk(
     'posts/fetchPostsByTopic',
-    async (topicID: number, { rejectWithValue }) => {
+    async (
+        { topicID, sortBy = 'hot' }: { 
+            topicID: number; 
+            sortBy?: string 
+        }, 
+        { rejectWithValue }
+    ) => {
         try {
-            const response = await apiClient.get<Post[]>(`/topics/${topicID}/posts`);
+            const response = await apiClient.get<Post[]>(`/topics/${topicID}/posts?sort=${sortBy}`);
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to fetch posts');
@@ -130,6 +138,9 @@ const postsSlice = createSlice({
         clearError: (state) => {
             state.error = null;
             state.submitError = null;
+        },
+        setPostsSortBy: (state, action) => {
+            state.sortBy = action.payload;
         }
     },
     extraReducers: (builder) => {
@@ -313,5 +324,5 @@ const postsSlice = createSlice({
     }
 })
 
-export const { clearError } = postsSlice.actions;
+export const { clearError, setPostsSortBy } = postsSlice.actions;
 export default postsSlice.reducer;
