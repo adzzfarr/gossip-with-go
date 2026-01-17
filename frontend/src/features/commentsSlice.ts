@@ -9,6 +9,7 @@ interface CommentsState {
     error: string | null;
     submitting: boolean;
     submitError: string | null;
+    sortBy: string;
 }
 
 const initialState: CommentsState = {
@@ -17,14 +18,21 @@ const initialState: CommentsState = {
     error: null,
     submitting: false,
     submitError: null,
+    sortBy: 'newest',
 }
 
 // Fetch comments by postID
 export const fetchCommentsByPostID = createAsyncThunk(
     'comments/fetchCommentsByPostID',
-    async (postID: number, { rejectWithValue }) => {
+    async (
+        { postID, sortBy }: { 
+            postID: number; 
+            sortBy: string 
+        }, 
+        { rejectWithValue }
+    ) => {
         try {
-            const response = await apiClient.get<Comment[]>(`/posts/${postID}/comments`);
+            const response = await apiClient.get<Comment[]>(`/posts/${postID}/comments?sort=${sortBy}`);
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to fetch comments');
@@ -117,6 +125,9 @@ const commentsSlice = createSlice({
             state.error = null;
             state.submitError = null;
         },
+        setCommentsSortBy: (state, action) => {
+            state.sortBy = action.payload;
+        }
     },
     extraReducers: (builder) => {
         // Fetch comments by postID
@@ -253,5 +264,5 @@ const commentsSlice = createSlice({
     },
 });
 
-export const { clearError: clearCommentsError } = commentsSlice.actions;
+export const { clearError: clearCommentsError, setCommentsSortBy } = commentsSlice.actions;
 export default commentsSlice.reducer;

@@ -2,13 +2,14 @@ import type { Comment as CommentType } from "../types/index";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { deletePost, fetchPostByID } from "../features/postsSlice";
-import { clearCommentsError, createComment, deleteComment, fetchCommentsByPostID, updateComment } from "../features/commentsSlice";
+import { clearCommentsError, createComment, deleteComment, fetchCommentsByPostID, setCommentsSortBy, updateComment } from "../features/commentsSlice";
 import { useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack, Delete, Edit } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 import Username from "../components/Username";
 import VoteButtons from "../components/VoteButtons";
+import SortDropdown from "../components/SortDropdown";
 
 export default function PostPage() {
     const { postID } = useParams<{ postID: string}>();
@@ -16,13 +17,15 @@ export default function PostPage() {
     const navigate = useNavigate();
 
     const { currentPost, loading: postLoading, error: postError, submitting: postSubmitting } = useAppSelector(state => state.posts);
-    const { comments, loading: commentsLoading, error: commentsError, submitting: commentSubmitting, submitError: commentSubmitError } = useAppSelector(state => state.comments);
+    const { comments, loading: commentsLoading, error: commentsError, submitting: commentSubmitting, submitError: commentSubmitError, sortBy} = useAppSelector(state => state.comments);
     const { userID } = useAppSelector(state => state.auth);
 
     useEffect(() => {
         if (postID) {
-            dispatch(fetchPostByID(parseInt(postID)));
-            dispatch(fetchCommentsByPostID(parseInt(postID)));
+            const id = parseInt(postID);
+
+            dispatch(fetchPostByID(id));
+            dispatch(fetchCommentsByPostID({ postID: id, sortBy }));
         }
     }, [postID, dispatch]);
 
@@ -31,6 +34,13 @@ export default function PostPage() {
 
     // For adding new comment
     const [commentContent, setCommentContent] = useState('');    
+
+    const handleCommentSortChange = (newSort: string) => {
+        dispatch(setCommentsSortBy(newSort));
+        if (postID) {
+            dispatch(fetchCommentsByPostID({ postID: parseInt(postID), sortBy: newSort }));
+        }
+    }
 
     const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setCommentContent(e.target.value);
@@ -300,13 +310,35 @@ export default function PostPage() {
 
             {/* Comments Section */}
             <Box>
-                <Typography 
-                    variant="h5" 
-                    component="h2" 
-                    gutterBottom
+                {/* Comments Header with Sort*/}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        mb: 3,
+                    }}
                 >
-                    Comments
-                </Typography>
+                    <Typography 
+                        variant="h5" 
+                        component="h2" 
+                        gutterBottom
+                    >
+                        Comments ({comments.length})
+                    </Typography>
+
+                    <SortDropdown 
+                        value={sortBy}
+                        onChange={handleCommentSortChange}
+                        options={[
+                            { value: 'hot', label: 'Hot' },
+                            { value: 'newest', label: 'Newest' },
+                            { value: 'oldest', label: 'Oldest' },
+                            { value: 'most_voted', label: 'Most Voted' },
+                        ]}
+                    />
+                </Box>
+
 
                 {commentsError && (
                     <Alert severity="error" sx={{ mb: 2 }}>
