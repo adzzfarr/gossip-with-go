@@ -64,3 +64,31 @@ type Vote struct {
 	CreatedAt time.Time `json:"createdAt" db:"created_at"`
 	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
 }
+
+// PaginationMetadata for pagination info
+type PaginationMetadata struct {
+	CurrentPage int  `json:"currentPage"`
+	TotalPages  int  `json:"totalPages"`
+	PageSize    int  `json:"pageSize"`
+	TotalItems  int  `json:"totalItems"`
+	HasNext     bool `json:"hasNext"`
+	HasPrevious bool `json:"hasPrevious"`
+}
+
+// TopicsResponse for paginated topics
+type TopicsResponse struct {
+	Topics     []*Topic           `json:"topics"`
+	Pagination PaginationMetadata `json:"pagination"`
+}
+
+// PostsResponse for paginated posts
+type PostsResponse struct {
+	Posts      []*Post            `json:"posts"`
+	Pagination PaginationMetadata `json:"pagination"`
+}
+
+// CommentsResponse for paginated comments
+type CommentsResponse struct {
+	Comments   []*Comment         `json:"comments"`
+	Pagination PaginationMetadata `json:"pagination"`
+}

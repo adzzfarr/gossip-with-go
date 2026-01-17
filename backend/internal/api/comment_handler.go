@@ -42,9 +42,22 @@ func (handler *CommentHandler) GetCommentsByPostID(ctx *gin.Context) {
 	// Get sortBy from query string (default: "newest")
 	sortBy := ctx.DefaultQuery("sort", "newest")
 
-	// Call service layer
-	comments, err := handler.CommentService.GetCommentsByPostID(postID, userID, sortBy)
+	// Get searchQuery from query string (default: "")
+	searchQuery := ctx.DefaultQuery("search", "")
 
+	// Parse pagination parameters (page, limit)
+	page, err := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(ctx.DefaultQuery("limit", "15"))
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	// Call service layer
+	commentsResponse, err := handler.CommentService.GetCommentsByPostID(postID, userID, sortBy, searchQuery, page, limit)
 	if err != nil {
 		// Send ISE status to client
 		ctx.JSON(
@@ -54,7 +67,7 @@ func (handler *CommentHandler) GetCommentsByPostID(ctx *gin.Context) {
 	}
 
 	// Gin serializes 'comments' slice into JSON
-	ctx.JSON(http.StatusOK, comments)
+	ctx.JSON(http.StatusOK, commentsResponse)
 }
 
 // CreateCommentRequest defines expected JSON input for new comments

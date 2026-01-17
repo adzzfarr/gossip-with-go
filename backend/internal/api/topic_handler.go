@@ -24,8 +24,22 @@ func (handler *TopicHandler) GetAllTopics(ctx *gin.Context) {
 	// Get sortBy from query string (default: "newest")
 	sortBy := ctx.DefaultQuery("sort", "newest")
 
+	// Get searchQuery from query string (default: "")
+	searchQuery := ctx.DefaultQuery("search", "")
+
+	// Parse pagination parameters (page, limit)
+	page, err := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(ctx.DefaultQuery("limit", "9"))
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 9
+	}
+
 	// Call service layer
-	topics, err := handler.TopicService.GetAllTopics(sortBy)
+	topicsResponse, err := handler.TopicService.GetAllTopics(sortBy, searchQuery, page, limit)
 
 	if err != nil {
 		// Send ISE status to client
@@ -36,7 +50,7 @@ func (handler *TopicHandler) GetAllTopics(ctx *gin.Context) {
 	}
 
 	// Gin serializes 'topics' slice into JSON
-	ctx.JSON(http.StatusOK, topics)
+	ctx.JSON(http.StatusOK, topicsResponse)
 }
 
 // GetTopicByID handles GET requests for a specific topic by its ID

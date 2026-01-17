@@ -19,9 +19,12 @@ func NewRepository(db *pgxpool.Pool) *Repository {
 }
 
 // GetAllTopics fetches all topics from the database
-func (repo *Repository) GetAllTopics(sortBy string) ([]*Topic, error) {
+func (repo *Repository) GetAllTopics(sortBy, searchQuery string, page, limit int) (*TopicsResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // Ensures context is cleaned up when function returns
+	defer cancel()
+
+	// Offset for pagination
+	offset := (page - 1) * limit
 
 	// Determine ORDER BY based on sortBy
 	var orderBy string
@@ -36,6 +39,36 @@ func (repo *Repository) GetAllTopics(sortBy string) ([]*Topic, error) {
 		orderBy = "t.created_at DESC" // Default sorting
 	}
 
+	// WHERE clause for search query
+	whereClause := ""
+	args := []interface{}{}
+	argPosition := 1
+
+	if searchQuery != "" {
+		whereClause = fmt.Sprintf(`
+			WHERE (t.title ILIKE $%d OR t.description ILIKE $%d)`,
+			argPosition,
+			argPosition,
+		)
+		args = append(args, "%"+searchQuery+"%")
+		argPosition++
+	}
+
+	// Get total count for pagination
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT t.topic_id)
+		FROM topics t
+		%s`, whereClause,
+	)
+
+	var totalItems int
+	err := repo.DB.QueryRow(ctx, countQuery, args...).Scan(&totalItems)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total topics count: %w", err)
+	}
+
+	// Get paginated topics
+	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
 		SELECT 
 			t.topic_id, 
@@ -49,46 +82,70 @@ func (repo *Repository) GetAllTopics(sortBy string) ([]*Topic, error) {
         FROM topics t
         JOIN users u ON t.created_by = u.user_id
         LEFT JOIN posts p ON t.topic_id = p.topic_id
+		%s
         GROUP BY t.topic_id, u.username
-        ORDER BY %s`,
+        ORDER BY %s
+		LIMIT $%d 
+		OFFSET $%d`,
+		whereClause,
 		orderBy,
+		argPosition,
+		argPosition+1,
 	)
 
-	rows, err := repo.DB.Query(ctx, query)
+	rows, err := repo.DB.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query all topics failed: %w", err)
 	}
-	defer rows.Close() // Close rows after processing
+	defer rows.Close()
 
 	// Scan Results
 	topics := []*Topic{} // Initialize empty slice of Topic pointers
 	for rows.Next() {
-		var t Topic
+		var topic Topic
 
 		// Scan column values from current row into fields of the Topic struct (must match SELECT order)
 		err := rows.Scan(
-			&t.TopicID,
-			&t.Title,
-			&t.Description,
-			&t.CreatedBy,
-			&t.Username,
-			&t.CreatedAt,
-			&t.UpdatedAt,
-			&t.PostCount,
+			&topic.TopicID,
+			&topic.Title,
+			&topic.Description,
+			&topic.CreatedBy,
+			&topic.Username,
+			&topic.CreatedAt,
+			&topic.UpdatedAt,
+			&topic.PostCount,
 		)
 
 		if err != nil {
 			return nil, fmt.Errorf("error scanning topic row: %w", err)
 		}
 
-		topics = append(topics, &t) // Append a pointer to the Topic to the slice
+		topics = append(topics, &topic) // Append a pointer to the Topic to the slice
 	}
 
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error encountered during row iteration: %w", err)
 	}
 
-	return topics, nil
+	// Calculate pagination metadata
+	totalPages := (totalItems + limit - 1) / limit // Divide and round up
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	pagination := PaginationMetadata{
+		CurrentPage: page,
+		TotalPages:  totalPages,
+		PageSize:    limit,
+		TotalItems:  totalItems,
+		HasNext:     page < totalPages,
+		HasPrevious: page > 1,
+	}
+
+	return &TopicsResponse{
+		Topics:     topics,
+		Pagination: pagination,
+	}, nil
 }
 
 func (repo *Repository) GetTopicByID(topicID int) (*Topic, error) {
@@ -232,9 +289,11 @@ func (repo *Repository) CreateTopic(title, description string, userID int) (*Top
 }
 
 // GetPostsByTopicID fetches all posts for a given topic ID
-func (repo *Repository) GetPostsByTopicID(topicID int, userID *int, sortBy string) ([]*Post, error) {
+func (repo *Repository) GetPostsByTopicID(topicID int, userID *int, sortBy, searchQuery string, page, limit int) (*PostsResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	offset := (page - 1) * limit
 
 	var orderBy string
 	switch sortBy {
@@ -254,6 +313,40 @@ func (repo *Repository) GetPostsByTopicID(topicID int, userID *int, sortBy strin
 		orderBy = "p.created_at DESC"
 	}
 
+	whereClause := "WHERE p.topic_id = $1"
+	args := []interface{}{topicID}
+	argPosition := 2
+
+	if searchQuery != "" {
+		whereClause = fmt.Sprintf(`
+			AND (p.title ILIKE $%d OR p.content ILIKE $%d)`,
+			argPosition,
+			argPosition,
+		)
+		args = append(args, "%"+searchQuery+"%")
+		argPosition++
+	}
+
+	// Add userID parameter
+	args = append(args, userID)
+	userIDPosition := argPosition
+	argPosition++
+
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT p.post_id)
+		FROM posts p
+		%s`,
+		whereClause,
+	)
+
+	var totalItems int
+	countArgs := args[:len(args)-1] // Exclude userID for count query
+	err := repo.DB.QueryRow(ctx, countQuery, countArgs...).Scan(&totalItems)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total posts count: %w", err)
+	}
+
+	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
 		SELECT 
 			p.post_id, 
@@ -267,21 +360,29 @@ func (repo *Repository) GetPostsByTopicID(topicID int, userID *int, sortBy strin
 			p.updated_at,
 			p.vote_count,
 			CASE 
-				WHEN $2::integer IS NOT NULL THEN (
+				WHEN $%d::integer IS NOT NULL THEN (
 					SELECT vote_type FROM votes 
-					WHERE user_id = $2 AND post_id = p.post_id
+					WHERE user_id = $%d AND post_id = p.post_id
 				)
 				ELSE NULL
 			END AS user_vote
 		FROM posts p
 		JOIN users u ON p.created_by = u.user_id
 		JOIN topics t ON p.topic_id = t.topic_id
-		WHERE p.topic_id = $1
-		ORDER BY %s`,
+		%s
+		ORDER BY %s
+		LIMIT $%d
+		OFFSET $%d
+		`,
+		userIDPosition,
+		userIDPosition,
+		whereClause,
 		orderBy,
+		argPosition,
+		argPosition+1,
 	)
 
-	rows, err := repo.DB.Query(ctx, query, topicID, userID)
+	rows, err := repo.DB.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query posts: %w", err)
 	}
@@ -316,7 +417,24 @@ func (repo *Repository) GetPostsByTopicID(topicID int, userID *int, sortBy strin
 		return nil, fmt.Errorf("error encountered during row iteration: %w", err)
 	}
 
-	return posts, nil
+	totalPages := (totalItems + limit - 1) / limit
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	pagination := PaginationMetadata{
+		CurrentPage: page,
+		TotalPages:  totalPages,
+		PageSize:    limit,
+		TotalItems:  totalItems,
+		HasNext:     page < totalPages,
+		HasPrevious: page > 1,
+	}
+
+	return &PostsResponse{
+		Posts:      posts,
+		Pagination: pagination,
+	}, nil
 }
 
 // GetPostByID fetches a specific post by its ID
@@ -374,9 +492,11 @@ func (repo *Repository) GetPostByID(postID int, userID *int) (*Post, error) {
 }
 
 // GetCommentsByPostID fetches all comments for a given post ID
-func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy string) ([]*Comment, error) {
+func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy, searchQuery string, page, limit int) (*CommentsResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	offset := (page - 1) * limit
 
 	var orderBy string
 	switch sortBy {
@@ -396,6 +516,39 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy stri
 		orderBy = "c.created_at DESC"
 	}
 
+	whereClause := "WHERE c.post_id = $1"
+	args := []interface{}{postID}
+	argPosition := 2
+
+	if searchQuery != "" {
+		whereClause += fmt.Sprintf(`
+			AND (c.content ILIKE $%d)`,
+			argPosition,
+		)
+		args = append(args, "%"+searchQuery+"%")
+		argPosition++
+	}
+
+	// Add userID parameter
+	args = append(args, userID)
+	userIDPosition := argPosition
+	argPosition++
+
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT c.comment_id)
+		FROM comments c
+		%s`,
+		whereClause,
+	)
+
+	var totalItems int
+	countArgs := args[:len(args)-1] // Exclude userID for count query
+	err := repo.DB.QueryRow(ctx, countQuery, countArgs...).Scan(&totalItems)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total comments count: %w", err)
+	}
+
+	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
 		SELECT 
 			c.comment_id, 
@@ -407,20 +560,28 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy stri
 			c.updated_at,
 			c.vote_count,
 			CASE
-				WHEN $2::integer IS NOT NULL THEN (
+				WHEN $%d::integer IS NOT NULL THEN (
 					SELECT vote_type FROM votes
-					WHERE user_id = $2 AND comment_id = c.comment_id
+					WHERE user_id = $%d AND comment_id = c.comment_id
 				)
 				ELSE NULL
 			END AS user_vote
 		FROM comments c
 		JOIN users u ON c.created_by = u.user_id
-		WHERE c.post_id = $1
-		ORDER BY %s`,
+		%s
+		ORDER BY %s
+		LIMIT $%d
+		OFFSET $%d
+		`,
+		userIDPosition,
+		userIDPosition,
+		whereClause,
 		orderBy,
+		argPosition,
+		argPosition+1,
 	)
 
-	rows, err := repo.DB.Query(ctx, query, postID, userID)
+	rows, err := repo.DB.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query comments: %w", err)
 	}
@@ -453,7 +614,24 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy stri
 		return nil, fmt.Errorf("error encountered during row iteration: %w", err)
 	}
 
-	return comments, nil
+	totalPages := (totalItems + limit - 1) / limit
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	pagination := PaginationMetadata{
+		CurrentPage: page,
+		TotalPages:  totalPages,
+		PageSize:    limit,
+		TotalItems:  totalItems,
+		HasNext:     page < totalPages,
+		HasPrevious: page > 1,
+	}
+
+	return &CommentsResponse{
+		Comments:   comments,
+		Pagination: pagination,
+	}, nil
 }
 
 // GetCommentByID fetches a specific comment by its ID

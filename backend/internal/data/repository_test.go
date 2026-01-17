@@ -14,7 +14,7 @@ func TestGetAllTopicsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to connect to DB: %v", err)
 	}
-	defer db.Close() // Ensure DB connection is closed after test
+	defer db.Close()
 
 	repo := NewRepository(db)
 	ctx := context.Background()
@@ -44,10 +44,11 @@ func TestGetAllTopicsIntegration(t *testing.T) {
 	}
 
 	// Test Repository Function
-	topics, err := repo.GetAllTopics("newest")
+	topicsResponse, err := repo.GetAllTopics("newest", "", 1, 10)
 	if err != nil {
 		t.Errorf("GetAllTopics failed with error: %v", err)
 	}
+	topics := topicsResponse.Topics
 
 	if len(topics) == 0 {
 		t.Fatalf("Expected at least 1 topic, but got 0")
@@ -420,10 +421,11 @@ func TestGetPostsByTopicID(t *testing.T) {
 
 	// 1. Successful retrieval of posts
 	t.Run("TestSuccessfulRetrievalOfPosts", func(t *testing.T) {
-		posts, err := repo.GetPostsByTopicID(topicID, nil, "newest")
+		postsResponse, err := repo.GetPostsByTopicID(topicID, nil, "newest", "", 1, 10)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
+		posts := postsResponse.Posts
 
 		if len(posts) == 0 {
 			t.Fatal("expected at least 1 post, got 0")
@@ -450,12 +452,12 @@ func TestGetPostsByTopicID(t *testing.T) {
 
 	// 2. Non-existent topic
 	t.Run("TestNonExistentTopic", func(t *testing.T) {
-		posts, err := repo.GetPostsByTopicID(999999, nil, "newest")
+		postsResponse, err := repo.GetPostsByTopicID(999999, nil, "newest", "", 1, 10)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		if len(posts) != 0 {
-			t.Errorf("expected 0 posts for non-existent topic, got %d", len(posts))
+		if len(postsResponse.Posts) != 0 {
+			t.Errorf("expected 0 posts for non-existent topic, got %d", len(postsResponse.Posts))
 		}
 	})
 }
@@ -629,10 +631,11 @@ func TestGetCommentsByPostID(t *testing.T) {
 
 	// 1. Successful retrieval of comments
 	t.Run("TestSuccessfulRetrievalOfComments", func(t *testing.T) {
-		comments, err := repo.GetCommentsByPostID(postID, nil, "newest")
+		commentsResponse, err := repo.GetCommentsByPostID(postID, nil, "newest", "", 1, 10)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
+		comments := commentsResponse.Comments
 
 		if len(comments) == 0 {
 			t.Fatal("expected at least 1 comment, got 0")
@@ -659,12 +662,12 @@ func TestGetCommentsByPostID(t *testing.T) {
 
 	// 2. Non-existent post
 	t.Run("TestNonExistentPost", func(t *testing.T) {
-		comments, err := repo.GetCommentsByPostID(999999, nil, "newest")
+		commentsResponse, err := repo.GetCommentsByPostID(999999, nil, "newest", "", 1, 10)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
-		if len(comments) != 0 {
-			t.Errorf("expected 0 comments for non-existent post, got %d", len(comments))
+		if len(commentsResponse.Comments) != 0 {
+			t.Errorf("expected 0 comments for non-existent post, got %d", len(commentsResponse.Comments))
 		}
 	})
 }

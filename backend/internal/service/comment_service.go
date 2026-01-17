@@ -18,7 +18,7 @@ func NewCommentService(repo *data.Repository) *CommentService {
 }
 
 // GetCommentsByPostID retrieves all comments for a given post
-func (commentService *CommentService) GetCommentsByPostID(postID int, userID *int, sortBy string) ([]*data.Comment, error) {
+func (commentService *CommentService) GetCommentsByPostID(postID int, userID *int, sortBy, searchQuery string, page, limit int) (*data.CommentsResponse, error) {
 	// Validate post ID
 	if postID <= 0 {
 		return nil, fmt.Errorf("invalid post ID: %d", postID)
@@ -36,18 +36,27 @@ func (commentService *CommentService) GetCommentsByPostID(postID int, userID *in
 		sortBy = "newest"
 	}
 
+	// Page and Limit Validation
+	if page < 1 {
+		page = 1
+	}
+
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
 	// Delegate call to repository layer
-	comments, err := commentService.Repo.GetCommentsByPostID(postID, userID, sortBy)
+	commentsResponse, err := commentService.Repo.GetCommentsByPostID(postID, userID, sortBy, searchQuery, page, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get comments for post ID %d: %w", postID, err)
 	}
 
-	if comments == nil {
-		// Return empty slice
-		comments = []*data.Comment{}
+	if commentsResponse.Comments == nil {
+		// Return response with empty comments slice
+		commentsResponse.Comments = []*data.Comment{}
 	}
 
-	return comments, nil
+	return commentsResponse, nil
 }
 
 // GetCommentByID retrieves a specific comment by its ID

@@ -40,11 +40,25 @@ func (handler *PostHandler) GetPostsByTopicID(ctx *gin.Context) {
 		userID = &uidInt
 	}
 
-	// Get sortBy from query string (default: "newest")
-	sortBy := ctx.DefaultQuery("sort", "newest")
+	// Get sortBy from query string (default: "hot")
+	sortBy := ctx.DefaultQuery("sort", "hot")
+
+	// Get searchQuery from query string (default: "")
+	searchQuery := ctx.DefaultQuery("search", "")
+
+	// Parse pagination parameters (page, limit)
+	page, err := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(ctx.DefaultQuery("limit", "15"))
+	if err != nil || limit < 1 || limit > 100 {
+		limit = 15
+	}
 
 	// Call service layer
-	posts, err := handler.PostService.GetPostsByTopicID(topicID, userID, sortBy)
+	postsResponse, err := handler.PostService.GetPostsByTopicID(topicID, userID, sortBy, searchQuery, page, limit)
 	if err != nil {
 		// Send ISE status to client
 		ctx.JSON(
@@ -54,7 +68,7 @@ func (handler *PostHandler) GetPostsByTopicID(ctx *gin.Context) {
 	}
 
 	// Gin serializes 'posts' slice into JSON
-	ctx.JSON(http.StatusOK, posts)
+	ctx.JSON(http.StatusOK, postsResponse)
 }
 
 // GetPostByID handles GET requests for a specific post by its ID

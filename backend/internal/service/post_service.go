@@ -18,7 +18,7 @@ func NewPostService(repo *data.Repository) *PostService {
 }
 
 // GetPostsByTopicID retrieves all posts for a given topic ID using the repository layer
-func (service *PostService) GetPostsByTopicID(topicID int, userID *int, sortBy string) ([]*data.Post, error) {
+func (service *PostService) GetPostsByTopicID(topicID int, userID *int, sortBy, searchQuery string, page, limit int) (*data.PostsResponse, error) {
 	// TopicID Validation
 	if topicID <= 0 {
 		return nil, fmt.Errorf("invalid topic ID: %d", topicID)
@@ -36,18 +36,27 @@ func (service *PostService) GetPostsByTopicID(topicID int, userID *int, sortBy s
 		sortBy = "newest"
 	}
 
+	// Page and Limit Validation
+	if page < 1 {
+		page = 1
+	}
+
+	if limit < 1 || limit > 100 {
+		limit = 15
+	}
+
 	// Delegate call to repository layer
-	posts, err := service.Repo.GetPostsByTopicID(topicID, userID, sortBy)
+	postsResponse, err := service.Repo.GetPostsByTopicID(topicID, userID, sortBy, searchQuery, page, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts for topic ID %d: %w", topicID, err)
 	}
 
-	if posts == nil {
-		// Return empty slice
-		posts = []*data.Post{}
+	if postsResponse.Posts == nil {
+		// Return response with empty posts slice
+		postsResponse.Posts = []*data.Post{}
 	}
 
-	return posts, nil
+	return postsResponse, nil
 }
 
 // GetPostByID retrieves a specific post by its ID
