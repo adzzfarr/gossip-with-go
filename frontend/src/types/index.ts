@@ -110,3 +110,29 @@ export interface VoteResponse {
     newVoteCount: number;
     userVote: number | null;
 }
+
+// Pagination metadata
+export interface PaginationMetadata {
+    currentPage: number;
+    totalPages: number;
+    pageSize: number;
+    totalItems: number;
+    hasNext: boolean;
+    hasPrevious: boolean;
+}
+
+// Response wrappers with pagination metadata
+export interface TopicsResponse {
+    topics: Topic[];
+    pagination: PaginationMetadata;
+}
+
+export interface PostsResponse {
+    posts: Post[];
+    pagination: PaginationMetadata;
+}
+
+export interface CommentsResponse {
+    comments: Comment[];
+    pagination: PaginationMetadata;
+}

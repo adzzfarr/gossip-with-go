@@ -1,39 +1,60 @@
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect, useState } from "react";
-import { fetchTopics, setTopicsSortBy } from "../features/topicsSlice";
+import { fetchTopics, setTopicsCurrentPage, setTopicsSearchQuery, setTopicsSortBy } from "../features/topicsSlice";
 import { Alert, Box, Button, CircularProgress, Container, IconButton, InputAdornment, TextField, Typography } from "@mui/material";
 import { Add, Clear, Search } from "@mui/icons-material";
 import TopicsList from "../components/TopicsList";
 import SortDropdown from "../components/SortDropdown";
+import Pagination from "../components/Pagination";
 
 export default function TopicsPage() {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
-    const { topics, loading, error, sortBy } = useAppSelector(state => state.topics);
+    const { topics, loading, error, sortBy, searchQuery, pagination, currentPage } = useAppSelector(state => state.topics);
     const { isAuthenticated } = useAppSelector(state => state.auth);
 
-    const [searchQuery, setSearchQuery] = useState('');
+    const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
 
     const handleClearSearch = () => {
-        setSearchQuery('');
+        setLocalSearchQuery('');
+        dispatch(setTopicsSearchQuery(''));
+    }
+
+    const handleSearchChange = (value: string) => {
+        setLocalSearchQuery(value);
     }
 
     const handleSortChange = (newSort: string) => {
         dispatch(setTopicsSortBy(newSort));
-        dispatch(fetchTopics(newSort));
     }
 
-    useEffect(() => {
-        dispatch(fetchTopics(sortBy));
-    }, [dispatch, sortBy]);
+    const handlePageChange = (newPage: number) => {
+        dispatch(setTopicsCurrentPage(newPage));
+        
+        // Scroll to top on page change
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
-    const filteredTopics = topics.filter(
-        topic => {
-            const query = searchQuery.trim().toLowerCase();
-            return topic.title.toLowerCase().includes(query);
-        }
-    );
+    // Debounce search input
+    useEffect(() => {
+        const delayDebounce = setTimeout(() => {
+            if (localSearchQuery !== searchQuery) {
+                dispatch(setTopicsSearchQuery(localSearchQuery));
+            }
+            
+        }, 500);
+
+        return () => clearTimeout(delayDebounce);
+    }, [localSearchQuery, searchQuery, dispatch]);
+
+    useEffect(() => {
+        dispatch(fetchTopics({
+            sortBy,
+            page: currentPage,
+            search: searchQuery,
+        }));
+    }, [dispatch, sortBy, searchQuery, currentPage]);
 
     if (loading) {
         return (
@@ -89,7 +110,7 @@ export default function TopicsPage() {
                         startIcon={<Add />}
                         onClick={() => navigate('/topics/create')}
                         sx={{ whiteSpace: 'nowrap' }}
-                        
+
                     >
                         New Topic
                     </Button>
@@ -108,8 +129,8 @@ export default function TopicsPage() {
                     size="small"
                     fullWidth
                     placeholder="Search Topics..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={localSearchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                     slotProps={{
                         input: {
                             'startAdornment': (
@@ -117,7 +138,7 @@ export default function TopicsPage() {
                                     <Search color="action"/>
                                 </InputAdornment>
                             ),
-                            'endAdornment': searchQuery && (
+                            'endAdornment': localSearchQuery && (
                                 <InputAdornment position="end">
                                     <IconButton
                                         size="small"
@@ -143,27 +164,37 @@ export default function TopicsPage() {
                 />
             </Box>
             
-            {searchQuery && (
+            {localSearchQuery && pagination && (
                 <Typography
                     variant="body2"
                     color="text.secondary"
                     sx={{ mb: 2 }}
                 >
-                    Showing {filteredTopics.length} result{filteredTopics.length !== 1 ? 's' : ''} for "{searchQuery}"
+                    Showing {pagination.totalItems} result{pagination.totalItems !== 1 ? 's' : ''} for "{localSearchQuery}"
                 </Typography>
             )}
 
             {/* Topics List */}
-            {filteredTopics.length === 0 
+            {topics.length === 0 
                 ? (<Alert severity="info">
                     {
-                        searchQuery
-                            ? `No topics matching "${searchQuery}".`
+                        localSearchQuery
+                            ? `No topics matching "${localSearchQuery}".`
                             : 'No topics available. Be the first to create one!'
                     }
                 </Alert>) 
-                : (<TopicsList topics={filteredTopics} />)
+                : (<TopicsList topics={topics} />)
             }
+
+            {/* Pagination Controls */}
+            {pagination && (
+                <Pagination 
+                    currentPage={pagination.currentPage}
+                    totalPages={pagination.totalPages}
+                    onPageChange={handlePageChange}
+                    disabled={loading}
+                />
+            )}
         </Container>
     )
 }

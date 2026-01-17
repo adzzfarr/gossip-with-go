@@ -1,6 +1,6 @@
 // Redux slice for topics state management
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
-import type { Topic } from '../types';
+import type { PaginationMetadata, Topic, TopicsResponse } from '../types';
 import { apiClient } from '../api/client';
 
 interface TopicsState {
@@ -10,6 +10,9 @@ interface TopicsState {
     submitting: boolean;
     submitError: string | null;
     sortBy: string;
+    searchQuery: string;
+    pagination: PaginationMetadata | null;
+    currentPage: number;
 }
 
 const initialState: TopicsState = {
@@ -19,17 +22,34 @@ const initialState: TopicsState = {
     submitting: false,
     submitError: null,
     sortBy: 'newest',
+    searchQuery: '',
+    pagination: null,
+    currentPage: 1,
 }
 
 // Fetch topics
 export const fetchTopics = createAsyncThunk(
     `topics/fetchTopics`,
     async (
-        sortBy: string = 'newest', 
+        { sortBy = 'newest' , page = 1, search = '' }: {
+            sortBy?: string;
+            page?: number;
+            search?: string;
+        }, 
         { rejectWithValue }
     ) => {
         try {
-            const response = await apiClient.get<Topic[]>(`/topics?sort=${sortBy}`);
+            const params = new URLSearchParams({
+                sort: sortBy,
+                page: page.toString(),
+                limit: '9',
+            });
+
+            if (search.trim() !== '') {
+                params.append('search', search.trim());
+            }
+
+            const response = await apiClient.get<TopicsResponse>(`/topics?${params.toString()}`);
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to fetch topics');
@@ -118,6 +138,14 @@ const topicsSlice = createSlice({
         },
         setTopicsSortBy: (state, action) => {
             state.sortBy = action.payload;
+            state.currentPage = 1; // Reset to first page on sort change
+        },
+        setTopicsSearchQuery: (state, action) => {
+            state.searchQuery = action.payload;
+            state.currentPage = 1; // Reset to first page on new search
+        },
+        setTopicsCurrentPage: (state, action) => {
+            state.currentPage = action.payload;
         },
     },
     extraReducers: (builder) => {
@@ -131,9 +159,10 @@ const topicsSlice = createSlice({
 
         builder.addCase(
             fetchTopics.fulfilled, 
-            (state, action: PayloadAction<Topic[]>) => {
+            (state, action) => {
                 state.loading = false;
-                state.topics = action.payload;
+                state.topics = action.payload.topics;
+                state.pagination = action.payload.pagination || null;
             }
         );
 
@@ -256,5 +285,5 @@ const topicsSlice = createSlice({
     }
 })
 
-export const { clearError, setTopicsSortBy } = topicsSlice.actions;
+export const { clearError, setTopicsSortBy, setTopicsSearchQuery, setTopicsCurrentPage } = topicsSlice.actions;
 export default topicsSlice.reducer;
