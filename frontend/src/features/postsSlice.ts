@@ -1,6 +1,6 @@
 // Redux slice for topics state management
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { Post, VoteResponse } from '../types';
+import type { PaginationMetadata, Post, PostsResponse, VoteResponse } from '../types';
 import { apiClient } from '../api/client';
 
 interface PostsState {
@@ -11,6 +11,9 @@ interface PostsState {
     submitting: boolean;
     submitError: string | null;
     sortBy: string;
+    searchQuery: string;
+    pagination: PaginationMetadata | null;
+    currentPage: number;
 }
 
 const initialState: PostsState = {
@@ -21,20 +24,45 @@ const initialState: PostsState = {
     submitting: false,
     submitError: null,
     sortBy: 'hot',
+    searchQuery: '',
+    pagination: null,
+    currentPage: 1,
 }
 
 // Fetch posts by topic
 export const fetchPostsByTopic = createAsyncThunk(
     'posts/fetchPostsByTopic',
     async (
-        { topicID, sortBy = 'hot' }: { 
+        { topicID, sortBy = 'hot', page = 1, search = '' }: { 
             topicID: number; 
-            sortBy?: string 
+            sortBy?: string;
+            page?: number;
+            search?: string; 
         }, 
         { rejectWithValue }
     ) => {
         try {
-            const response = await apiClient.get<Post[]>(`/topics/${topicID}/posts?sort=${sortBy}`);
+            const token = localStorage.getItem('token');
+
+            const params = new URLSearchParams({
+                sort: sortBy,
+                page: page.toString(),
+                limit: '15',
+            });
+
+            if (search.trim() !== '') {
+                params.append('search', search.trim());
+            }
+
+            const response = await apiClient.get<PostsResponse>(
+                `/topics/${topicID}/posts?${params.toString()}`,
+                token ? {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                } : undefined
+            );
+
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to fetch posts');
@@ -47,7 +75,15 @@ export const fetchPostByID = createAsyncThunk(
     'posts/fetchPostByID',
     async (postID: number, { rejectWithValue }) => {
         try {
-            const response = await apiClient.get<Post>(`/posts/${postID}`);
+            const token = localStorage.getItem('token');
+
+            const response = await apiClient.get<Post>(
+                `/posts/${postID}`, 
+                token ? {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                }
+            } : undefined);
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to fetch post');
@@ -67,7 +103,17 @@ export const createPost = createAsyncThunk(
         { rejectWithValue }
      ) => {
         try {
-            const response = await apiClient.post<Post>(`/topics/${topicID}/posts`, { title, content });
+            const token = localStorage.getItem('token');
+
+            const response = await apiClient.post<Post>(
+                `/topics/${topicID}/posts`, 
+                { title, content },
+                token ? {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                } : undefined
+            );
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to create post');
@@ -83,9 +129,16 @@ export const updatePost = createAsyncThunk(
         { rejectWithValue }
     ) => {
         try {
+            const token = localStorage.getItem('token');
+
             const response = await apiClient.put<Post>(
                 `/posts/${postID}`,
-                { title, content }
+                { title, content },
+                token ? {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                } : undefined
             )
 
             return response.data;
@@ -100,7 +153,13 @@ export const deletePost = createAsyncThunk(
     'posts/deletePost',
     async (postID: number, { rejectWithValue }) => {
         try {
-            await apiClient.delete(`/posts/${postID}`);
+            const token = localStorage.getItem('token');
+
+            await apiClient.delete(`/posts/${postID}`, token ? {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                }
+            } : undefined);
             return postID;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to delete post');
@@ -116,9 +175,16 @@ export const voteOnPost = createAsyncThunk(
         { rejectWithValue }
 ) => {
         try {
+            const token = localStorage.getItem('token');
+
             const response = await apiClient.post<VoteResponse>(
                 `/posts/${postID}/vote`,
-                { voteType }
+                { voteType },
+                token ? {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                } : undefined
             );
 
             return {
@@ -141,7 +207,15 @@ const postsSlice = createSlice({
         },
         setPostsSortBy: (state, action) => {
             state.sortBy = action.payload;
-        }
+            state.currentPage = 1;
+        },
+        setPostsSearchQuery: (state, action) => {
+            state.searchQuery = action.payload;
+            state.currentPage = 1;
+        },
+        setPostsCurrentPage: (state, action) => {
+            state.currentPage = action.payload;
+        },
     },
     extraReducers: (builder) => {
         // Fetch posts by topic
@@ -157,7 +231,8 @@ const postsSlice = createSlice({
             fetchPostsByTopic.fulfilled,
             (state, action) => {
                 state.loading = false;
-                state.posts = action.payload;
+                state.posts = action.payload.posts;
+                state.pagination = action.payload.pagination;
             }
         );
 
@@ -324,5 +399,5 @@ const postsSlice = createSlice({
     }
 })
 
-export const { clearError, setPostsSortBy } = postsSlice.actions;
+export const { clearError, setPostsSortBy, setPostsSearchQuery, setPostsCurrentPage } = postsSlice.actions;
 export default postsSlice.reducer;

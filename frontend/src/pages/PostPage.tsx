@@ -2,14 +2,15 @@ import type { Comment as CommentType } from "../types/index";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { deletePost, fetchPostByID } from "../features/postsSlice";
-import { clearCommentsError, createComment, deleteComment, fetchCommentsByPostID, setCommentsSortBy, updateComment } from "../features/commentsSlice";
+import { clearCommentsError, createComment, deleteComment, fetchCommentsByPostID, setCommentsCurrentPage, setCommentsSearchQuery, setCommentsSortBy, updateComment } from "../features/commentsSlice";
 import { useEffect, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Paper, TextField, Typography } from "@mui/material";
-import { ArrowBack, Delete, Edit } from "@mui/icons-material";
+import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
+import { ArrowBack, Clear, Delete, Edit, Search } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 import Username from "../components/Username";
 import VoteButtons from "../components/VoteButtons";
 import SortDropdown from "../components/SortDropdown";
+import Pagination from "../components/Pagination";
 
 export default function PostPage() {
     const { postID } = useParams<{ postID: string}>();
@@ -17,17 +18,60 @@ export default function PostPage() {
     const navigate = useNavigate();
 
     const { currentPost, loading: postLoading, error: postError, submitting: postSubmitting } = useAppSelector(state => state.posts);
-    const { comments, loading: commentsLoading, error: commentsError, submitting: commentSubmitting, submitError: commentSubmitError, sortBy} = useAppSelector(state => state.comments);
-    const { userID } = useAppSelector(state => state.auth);
+    const { comments, loading: commentsLoading, error: commentsError, submitting: commentSubmitting, submitError: commentSubmitError, sortBy, searchQuery, pagination, currentPage } = useAppSelector(state => state.comments);
+    const { userID, isAuthenticated } = useAppSelector(state => state.auth);
 
+    const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
+
+    const handleClearSearch = () => {
+        setLocalSearchQuery('');
+        dispatch(setCommentsSearchQuery(''));
+    }
+
+    const handleSearchChange = (value: string) => {
+        setLocalSearchQuery(value);
+    }
+
+    // Debounce search input
+    useEffect(() => {
+        const delayDebounce = setTimeout(() => {
+            if (localSearchQuery !== searchQuery) {
+                dispatch(setCommentsSearchQuery(localSearchQuery));
+            }
+            
+        }, 500);
+
+        return () => clearTimeout(delayDebounce);
+    }, [localSearchQuery, searchQuery, dispatch]);
+
+    // Fetch post on mount
     useEffect(() => {
         if (postID) {
-            const id = parseInt(postID);
-
-            dispatch(fetchPostByID(id));
-            dispatch(fetchCommentsByPostID({ postID: id, sortBy }));
+            dispatch(fetchPostByID(parseInt(postID)));
         }
     }, [postID, dispatch]);
+
+    // Fetch comments when postID, sortBy, searchQuery, or currentPage changes
+    useEffect(() => {
+        if (postID) {
+            dispatch(fetchCommentsByPostID({
+                postID: parseInt(postID),
+                sortBy,
+                search: searchQuery,
+                page: currentPage,
+            }));
+        }
+    }, [postID, sortBy, searchQuery, currentPage, dispatch]);
+
+    const handlePageChange = (newPage: number) => {
+        dispatch(setCommentsCurrentPage(newPage));
+        
+        // Scroll to top of comments section on page change
+        const commentsSection = document.getElementById('comments-section');
+        if (commentsSection) {
+            commentsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
 
     // Check if user is author 
     const isAuthor = currentPost && currentPost.createdBy === userID;
@@ -37,9 +81,6 @@ export default function PostPage() {
 
     const handleCommentSortChange = (newSort: string) => {
         dispatch(setCommentsSortBy(newSort));
-        if (postID) {
-            dispatch(fetchCommentsByPostID({ postID: parseInt(postID), sortBy: newSort }));
-        }
     }
 
     const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,7 +351,7 @@ export default function PostPage() {
 
             {/* Comments Section */}
             <Box>
-                {/* Comments Header with Sort*/}
+                {/* Comments Header */}
                 <Box
                     sx={{
                         display: 'flex',
@@ -319,26 +360,71 @@ export default function PostPage() {
                         mb: 3,
                     }}
                 >
-                    <Typography 
-                        variant="h5" 
-                        component="h2" 
-                        gutterBottom
-                    >
+                    <Typography variant="h5" component="h2">
                         Comments ({comments.length})
                     </Typography>
+                </Box>
+
+                {/* Search and Sort Controls */}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        mb: 3,
+                    }}
+                >
+                    <TextField
+                        size="small"
+                        fullWidth
+                        placeholder="Search Comments..."
+                        value={localSearchQuery}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        slotProps={{
+                            input: {
+                                'startAdornment': (
+                                    <InputAdornment position="start">
+                                        <Search color="action" />
+                                    </InputAdornment>
+                                ),
+                                'endAdornment': localSearchQuery && (
+                                    <InputAdornment position="end">
+                                        <IconButton
+                                            size="small"
+                                            onClick={handleClearSearch}
+                                            title="Clear Search"
+                                        >
+                                            <Clear />
+                                        </IconButton>
+                                    </InputAdornment>
+                                )
+                            }
+                        }}
+                    />
 
                     <SortDropdown 
                         value={sortBy}
                         onChange={handleCommentSortChange}
                         options={[
                             { value: 'hot', label: 'Hot' },
+                            { value: 'most_voted', label: 'Most Voted' },
                             { value: 'newest', label: 'Newest' },
                             { value: 'oldest', label: 'Oldest' },
-                            { value: 'most_voted', label: 'Most Voted' },
                         ]}
                     />
                 </Box>
 
+                {searchQuery && pagination && (
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2 }}
+                    >
+                        Showing {pagination.totalItems} result{pagination.totalItems !== 1 ? 's' : ''} for "{searchQuery}"
+                    </Typography>
+                )}
+
+                <Divider sx={{ mb: 3 }} />
 
                 {commentsError && (
                     <Alert severity="error" sx={{ mb: 2 }}>
@@ -491,39 +577,51 @@ export default function PostPage() {
                 }
 
                 {/* Add Comment Form */}
-                <Paper
-                    elevation={1}
-                    sx={{ 
-                        p: 2, 
-                        mb: 3 
-                    }}
-                >
-                    <form onSubmit={handleSubmitComment}>
-                        <TextField
-                            fullWidth
-                            multiline
-                            minRows={3}
-                            placeholder="Write a comment..."
-                            value={commentContent}
-                            onChange={handleCommentChange}
-                            disabled={commentSubmitting}
-                            sx={{ mb: 2 }}
-                        />
-                        
-                        {commentSubmitError && (
-                            <Alert severity="error" sx={{ mb: 2 }}>{commentSubmitError}</Alert>
-                        )}
+                {isAuthenticated && (
+                    <Paper
+                        elevation={1}
+                        sx={{ 
+                            p: 2, 
+                            mb: 3 
+                        }}
+                    >
+                        <form onSubmit={handleSubmitComment}>
+                            <TextField
+                                fullWidth
+                                multiline
+                                minRows={3}
+                                placeholder="Write a comment..."
+                                value={commentContent}
+                                onChange={handleCommentChange}
+                                disabled={commentSubmitting}
+                                sx={{ mb: 2 }}
+                            />
+                            
+                            {commentSubmitError && (
+                                <Alert severity="error" sx={{ mb: 2 }}>{commentSubmitError}</Alert>
+                            )}
 
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            disabled={commentSubmitting || !commentContent.trim()}
-                        >
-                            {commentSubmitting ? <CircularProgress size={24} /> : 'Post Comment'}
-                        </Button>
-                    </form>
-                </Paper>
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                disabled={commentSubmitting || !commentContent.trim()}
+                            >
+                                {commentSubmitting ? <CircularProgress size={24} /> : 'Post Comment'}
+                            </Button>
+                        </form>
+                    </Paper>)
+                }
             </Box>
+
+            {/* Pagination Controls */}
+            {pagination && (
+                <Pagination 
+                    currentPage={pagination.currentPage}
+                    totalPages={pagination.totalPages}
+                    onPageChange={handlePageChange}
+                    disabled={commentsLoading}
+                />
+            )}
 
             {/* Delete Comment Confirmation Dialog */}
             <Dialog

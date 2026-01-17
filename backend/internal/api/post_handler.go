@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -57,9 +58,16 @@ func (handler *PostHandler) GetPostsByTopicID(ctx *gin.Context) {
 		limit = 15
 	}
 
+	// ✅ ADD LOGGING HERE
+	log.Printf("Fetching posts for topicID=%d, userID=%v, sortBy=%s, page=%d, limit=%d, search=%s",
+		topicID, userID, sortBy, page, limit, searchQuery)
+
 	// Call service layer
 	postsResponse, err := handler.PostService.GetPostsByTopicID(topicID, userID, sortBy, searchQuery, page, limit)
 	if err != nil {
+		// ✅ LOG THE ACTUAL ERROR
+		log.Printf("ERROR fetching posts for topic %d: %v", topicID, err)
+
 		// Send ISE status to client
 		ctx.JSON(
 			http.StatusInternalServerError,

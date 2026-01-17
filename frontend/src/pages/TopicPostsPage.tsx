@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { useEffect, useState } from "react";
-import { fetchPostsByTopic, setPostsSortBy } from "../features/postsSlice";
+import { fetchPostsByTopic, setPostsCurrentPage, setPostsSearchQuery, setPostsSortBy } from "../features/postsSlice";
 import { Alert, Box, Button, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
 import { Add, ArrowBack, Clear, Delete, Edit, Search } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
@@ -9,19 +9,20 @@ import Username from "../components/Username";
 import { deleteTopic, fetchTopicByID } from "../features/topicsSlice";
 import PostsList from "../components/PostsList";
 import SortDropdown from "../components/SortDropdown";
+import Pagination from "../components/Pagination";
 
 export default function TopicPostsPage() {
     const { topicID } = useParams<{ topicID: string }>();
     const dispatch = useAppDispatch(); 
     const navigate = useNavigate();
 
-    const { posts, loading: postsLoading, error: postsError, sortBy } = useAppSelector(state => state.posts);
+    const { posts, loading: postsLoading, error: postsError, sortBy, searchQuery, pagination, currentPage } = useAppSelector(state => state.posts);
     const { topics, loading: topicLoading, submitting: topicSubmitting, submitError } = useAppSelector(state => state.topics);
-    const { userID } = useAppSelector(state => state.auth);
+    const { userID, isAuthenticated } = useAppSelector(state => state.auth);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     
-    const [searchQuery, setSearchQuery] = useState('');
+    const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
 
     // Find current topic from topics list
     const topic = topics.find(t => t.topicID === parseInt(topicID || '0'));
@@ -29,34 +30,24 @@ export default function TopicPostsPage() {
     // Check if user is author of topic
     const isAuthor = topic && topic.createdBy === userID;
 
-    useEffect(() => {
-        if (topicID) {
-            const id = parseInt(topicID);
+    const handleClearSearch = () => {
+        setLocalSearchQuery('');
+        dispatch(setPostsSearchQuery(''));
+    }
 
-            dispatch(fetchTopicByID(id));
-            dispatch(fetchPostsByTopic({ topicID: id, sortBy }));
-        }
-    }, [dispatch, topicID, sortBy]);
+    const handleSearchChange = (value: string) => {
+        setLocalSearchQuery(value);
+    }
 
     const handleSortChange = (newSort: string) => {
         dispatch(setPostsSortBy(newSort));
-        if (topicID) {
-            dispatch(fetchPostsByTopic({ topicID: parseInt(topicID), sortBy: newSort }));
-        }
     }
-
-    const filteredPosts = posts.filter(
-        post => {
-            const query = searchQuery.trim().toLowerCase();
-            return (
-                post.title.toLowerCase().includes(query) ||
-                post.content.toLowerCase().includes(query)
-            );
-        }
-    )
-
-    const handleClearSearch = () => {
-        setSearchQuery('');
+    
+    const handlePageChange = (newPage: number) => {
+        dispatch(setPostsCurrentPage(newPage));
+        
+        // Scroll to top on page change
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     const handleDeleteTopic = async () => {
@@ -70,6 +61,36 @@ export default function TopicPostsPage() {
         }
     }
 
+    // Debounce search input
+    useEffect(() => {
+        const delayDebounce = setTimeout(() => {
+            if (localSearchQuery !== searchQuery) {
+                dispatch(setPostsSearchQuery(localSearchQuery));
+            }
+            
+        }, 500);
+
+        return () => clearTimeout(delayDebounce);
+    }, [localSearchQuery, searchQuery, dispatch]);
+
+    // Fetch topic details 
+    useEffect(() => {
+        if (topicID) {
+            dispatch(fetchTopicByID(parseInt(topicID)));
+        }
+    }, [topicID, dispatch]);
+
+    // Fetch posts for topic
+    useEffect(() => {
+        if (topicID) {
+            dispatch(fetchPostsByTopic({
+                topicID: parseInt(topicID),
+                sortBy,
+                page: currentPage,
+                search: searchQuery,
+            }));
+        }
+    }, [topicID, sortBy, currentPage, searchQuery, dispatch]);
 
     if (topicLoading || postsLoading) {
         return (
@@ -274,8 +295,8 @@ export default function TopicPostsPage() {
                             size="small"
                             fullWidth
                             placeholder="Search Posts..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            value={localSearchQuery}
+                            onChange={(e) => handleSearchChange(e.target.value)}
                             slotProps={{
                                 input: {
                                     'startAdornment': (
@@ -283,7 +304,7 @@ export default function TopicPostsPage() {
                                             <Search color="action"/>
                                         </InputAdornment>
                                     ),
-                                    'endAdornment': searchQuery && (
+                                    'endAdornment': localSearchQuery && (
                                         <InputAdornment position="end">
                                             <IconButton
                                                 size="small"
@@ -311,39 +332,51 @@ export default function TopicPostsPage() {
                         />
                     </Box>
 
-                    <Button
-                        startIcon={<Add />}
-                        variant="contained"
-                        onClick={() => navigate(`/topics/${topicID}/create-post`)}
-                        sx={{ whiteSpace: 'nowrap' }}
-                    >
-                        Create Post 
-                    </Button>
+                    {isAuthenticated && topicID && (
+                        <Button
+                            startIcon={<Add />}
+                            variant="contained"
+                            onClick={() => navigate(`/topics/${topicID}/create-post`)}
+                            sx={{ whiteSpace: 'nowrap' }}
+                        >
+                            Create Post 
+                        </Button>)
+                    }
                 </Box>
 
-                {searchQuery && (
+                {localSearchQuery && pagination && (
                     <Typography
                         variant="body2"
                         color="text.secondary"
                         sx={{ mb: 2 }}
                     >
-                        Showing {filteredPosts.length} result{filteredPosts.length !== 1 ? 's' : ''} for "{searchQuery}"
+                        Showing {pagination.totalItems} result{pagination.totalItems !== 1 ? 's' : ''} for "{localSearchQuery}"
                     </Typography>
                 )}
 
-                {filteredPosts.length === 0
+                {posts.length === 0
                 ? (
                     <Alert severity="info">
                         {
-                            searchQuery
-                                ? `No posts matching "${searchQuery}".`
+                            localSearchQuery
+                                ? `No posts matching "${localSearchQuery}".`
                                 : 'No posts available. Be the first to create one!'
                         }
                     </Alert>
                 )
-                : (<PostsList posts={filteredPosts} />)
+                : (<PostsList posts={posts} />)
                 }
             </Box>
+
+            {/* Pagination Controls */}
+            {pagination && (
+                <Pagination 
+                    currentPage={pagination.currentPage}
+                    totalPages={pagination.totalPages}
+                    onPageChange={handlePageChange}
+                    disabled={postsLoading}
+                />
+            )}
 
             {/* Delete Confirmation Dialog */}
             <Dialog

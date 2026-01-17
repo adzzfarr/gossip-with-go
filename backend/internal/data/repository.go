@@ -300,8 +300,7 @@ func (repo *Repository) GetPostsByTopicID(topicID int, userID *int, sortBy, sear
 	case "hot":
 		// Hot Score: (votes) / (age in hours + 2)^1.5
 		orderBy = `(
-			CAST(p.vote_count AS FLOAT) /
-			POWER((EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600) + 2, 1.5)
+			COALESCE(p.vote_count, 0) - (EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 86400)
 		) DESC`
 	case "newest":
 		orderBy = "p.created_at DESC"
@@ -310,7 +309,9 @@ func (repo *Repository) GetPostsByTopicID(topicID int, userID *int, sortBy, sear
 	case "most_voted":
 		orderBy = "p.vote_count DESC, p.created_at DESC"
 	default:
-		orderBy = "p.created_at DESC"
+		orderBy = `(
+			COALESCE(p.vote_count, 0) - (EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 86400)
+		) DESC`
 	}
 
 	whereClause := "WHERE p.topic_id = $1"
@@ -503,8 +504,7 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy, sea
 	case "hot":
 		// Hot Score: (votes) / (age in hours + 2)^1.5
 		orderBy = `(
-			CAST(c.vote_count AS FLOAT) /
-			POWER((EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 3600) + 2, 1.5)
+			COALESCE(c.vote_count, 0) - (EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400)
 		) DESC`
 	case "newest":
 		orderBy = "c.created_at DESC"
@@ -513,7 +513,9 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy, sea
 	case "most_voted":
 		orderBy = "c.vote_count DESC, c.created_at DESC"
 	default:
-		orderBy = "c.created_at DESC"
+		orderBy = `(
+			COALESCE(c.vote_count, 0) - (EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400)
+		) DESC`
 	}
 
 	whereClause := "WHERE c.post_id = $1"

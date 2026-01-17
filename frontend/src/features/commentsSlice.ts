@@ -1,6 +1,6 @@
 // Redux slice for comments state management
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import type { VoteResponse, Comment } from '../types'; 
+import type { VoteResponse, Comment, PaginationMetadata, CommentsResponse } from '../types'; 
 import { apiClient } from '../api/client';
 
 interface CommentsState {
@@ -10,6 +10,9 @@ interface CommentsState {
     submitting: boolean;
     submitError: string | null;
     sortBy: string;
+    searchQuery: string;
+    pagination: PaginationMetadata | null;
+    currentPage: number;
 }
 
 const initialState: CommentsState = {
@@ -19,20 +22,44 @@ const initialState: CommentsState = {
     submitting: false,
     submitError: null,
     sortBy: 'newest',
+    searchQuery: '',
+    pagination: null,
+    currentPage: 1,
 }
 
 // Fetch comments by postID
 export const fetchCommentsByPostID = createAsyncThunk(
     'comments/fetchCommentsByPostID',
     async (
-        { postID, sortBy }: { 
+        { postID, sortBy = 'newest', page = 1, search = '' }: { 
             postID: number; 
-            sortBy: string 
+            sortBy: string;
+            page: number;
+            search: string;
         }, 
         { rejectWithValue }
     ) => {
         try {
-            const response = await apiClient.get<Comment[]>(`/posts/${postID}/comments?sort=${sortBy}`);
+            const token = localStorage.getItem('token');
+
+            const params = new URLSearchParams({
+                sort: sortBy,
+                page: page.toString(),
+                limit: '20',
+            });
+
+            if (search.trim() !== '') {
+                params.append('search', search.trim());
+            }
+
+            const response = await apiClient.get<CommentsResponse>(
+                `/posts/${postID}/comments?${params.toString()}`,
+                token ? {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }   
+                } : undefined
+            );
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to fetch comments');
@@ -51,7 +78,17 @@ export const createComment = createAsyncThunk(
         { rejectWithValue }
     ) => {
         try {
-            const response = await apiClient.post<Comment>(`/posts/${postID}/comments`, { content });
+            const token = localStorage.getItem('token');
+            
+            const response = await apiClient.post<Comment>(
+                `/posts/${postID}/comments`, 
+                { content },
+                token ? {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }   
+                } : undefined
+            );
             return response.data;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to create comment');
@@ -67,9 +104,16 @@ export const updateComment = createAsyncThunk(
         { rejectWithValue }
     ) => {
         try {
+            const token = localStorage.getItem('token');
+
             const response = await apiClient.put<Comment>(
                 `/comments/${commentID}`, 
-                { content }
+                { content },
+                token ? {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }   
+                } : undefined
             );
             return response.data;
         } catch (error: any) {
@@ -83,7 +127,16 @@ export const deleteComment = createAsyncThunk(
     'comments/deleteComment',
     async (commentID: number, { rejectWithValue }) => {
         try {
-            await apiClient.delete(`/comments/${commentID}`);
+            const token = localStorage.getItem('token');
+
+            await apiClient.delete(
+                `/comments/${commentID}`,
+                token ? {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }   
+                } : undefined
+            );
             return commentID;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.error || 'Failed to delete comment');
@@ -102,9 +155,16 @@ export const voteOnComment = createAsyncThunk(
         { rejectWithValue }
     ) => {
         try {
+            const token = localStorage.getItem('token');
+
             const response = await apiClient.post<VoteResponse>(
                 `/comments/${commentID}/vote`,
-                { voteType }
+                { voteType },
+                token ? {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }   
+                } : undefined
             );
 
             return {
@@ -127,7 +187,15 @@ const commentsSlice = createSlice({
         },
         setCommentsSortBy: (state, action) => {
             state.sortBy = action.payload;
-        }
+            state.currentPage = 1;
+        },
+        setCommentsSearchQuery: (state, action) => {
+            state.searchQuery = action.payload;
+            state.currentPage = 1;
+        },
+        setCommentsCurrentPage: (state, action) => {
+            state.currentPage = action.payload;
+        },
     },
     extraReducers: (builder) => {
         // Fetch comments by postID
@@ -143,7 +211,8 @@ const commentsSlice = createSlice({
             fetchCommentsByPostID.fulfilled,
             (state, action) => {
                 state.loading = false;
-                state.comments = action.payload;
+                state.comments = action.payload.comments;
+                state.pagination = action.payload.pagination;
             }
         );
 
@@ -264,5 +333,5 @@ const commentsSlice = createSlice({
     },
 });
 
-export const { clearError: clearCommentsError, setCommentsSortBy } = commentsSlice.actions;
+export const { clearError: clearCommentsError, setCommentsSortBy, setCommentsSearchQuery, setCommentsCurrentPage } = commentsSlice.actions;
 export default commentsSlice.reducer;
