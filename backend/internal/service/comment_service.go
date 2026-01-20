@@ -75,18 +75,63 @@ func (commentService *CommentService) GetCommentByID(commentID int, userID *int)
 	return comment, nil
 }
 
+// Max Reply Depth
+const MaxReplyDepth = 5
+
+// calculateCommentDepth calculates the depth of a comment based on its parent comment
+func (commentService *CommentService) calculateCommentDepth(commentID int) int {
+	comment, err := commentService.Repo.GetCommentByID(commentID, nil)
+	if err != nil || comment == nil {
+		return 0
+	}
+
+	// If no parent, depth is 0 (top-level comment)
+	if comment.ParentCommentID == nil {
+		return 0
+	}
+
+	// Recursively calculate depth
+	return 1 + commentService.calculateCommentDepth(*comment.ParentCommentID)
+}
+
 // CreateComment creates a new comment on a post
-func (commentService *CommentService) CreateComment(postID int, content string, userID int) (*data.Comment, error) {
+func (commentService *CommentService) CreateComment(postID int, content string, userID int, parentCommentID *int) (*data.Comment, error) {
 	// Content Validation
 	if strings.TrimSpace(content) == "" {
 		return nil, fmt.Errorf("content cannot be empty")
 	}
+
 	if len(content) > 2000 {
 		return nil, fmt.Errorf("content exceeds maximum length of 2000 characters")
 	}
 
+	// Validate post exists
+	post, err := commentService.Repo.GetPostByID(postID, &userID)
+	if err != nil || post == nil {
+		return nil, fmt.Errorf("post with ID %d does not exist", postID)
+	}
+
+	// If this is a reply, validate parent comment
+	if parentCommentID != nil {
+		parentComment, err := commentService.Repo.GetCommentByID(*parentCommentID, &userID)
+		if err != nil || parentComment == nil {
+			return nil, fmt.Errorf("parent comment with ID %d does not exist", *parentCommentID)
+		}
+
+		// Ensure parent comment belongs to the same post
+		if parentComment.PostID != postID {
+			return nil, fmt.Errorf("parent comment with ID %d does not belong to post ID %d", *parentCommentID, postID)
+		}
+
+		// Check reply depth
+		depth := commentService.calculateCommentDepth(*parentCommentID)
+		if depth >= MaxReplyDepth {
+			return nil, fmt.Errorf("maximum reply depth of %d exceeded", MaxReplyDepth)
+		}
+	}
+
 	// Create comment
-	createdComment, err := commentService.Repo.CreateComment(postID, content, userID)
+	createdComment, err := commentService.Repo.CreateComment(postID, content, userID, parentCommentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create comment: %w", err)
 	}

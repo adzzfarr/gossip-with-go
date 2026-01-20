@@ -72,7 +72,8 @@ func (handler *CommentHandler) GetCommentsByPostID(ctx *gin.Context) {
 
 // CreateCommentRequest defines expected JSON input for new comments
 type CreateCommentRequest struct {
-	Content string `json:"content" binding:"required"`
+	Content         string `json:"content" binding:"required"`
+	ParentCommentID *int   `json:"parentCommentID"`
 }
 
 // CreateComment handles POST requests for creating new comments
@@ -114,12 +115,16 @@ func (handler *CommentHandler) CreateComment(ctx *gin.Context) {
 		postID,
 		req.Content,
 		userID.(int),
+		req.ParentCommentID,
 	)
 
 	if err != nil {
 		// Check for validation errors (Bad Request 400)
 		if err.Error() == "content cannot be empty" ||
-			err.Error() == "content exceeds maximum length of 2000 characters" {
+			err.Error() == "content exceeds maximum length of 2000 characters" ||
+			strings.Contains(err.Error(), "does not exist") ||
+			err.Error() == "parent comment with ID does not belong to post ID" ||
+			err.Error() == "maximum reply depth of 5 exceeded" {
 			ctx.JSON(
 				http.StatusBadRequest,
 				gin.H{"error": err.Error()},

@@ -42,16 +42,19 @@ type Post struct {
 
 // Comment struct
 type Comment struct {
-	CommentID int       `json:"commentID" db:"comment_id"` // Primary key
-	PostID    int       `json:"postID" db:"post_id"`       // Foreign key to Post
-	PostTitle string    `json:"postTitle" db:"post_title"`
-	Content   string    `json:"content" db:"content"`
-	CreatedBy int       `json:"createdBy" db:"created_by"`
-	Username  string    `json:"username" db:"username"`
-	CreatedAt time.Time `json:"createdAt" db:"created_at"`
-	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
-	VoteCount int       `json:"voteCount" db:"vote_count"`
-	UserVote  *int      `json:"userVote,omitempty" db:"user_vote"` // Current user's vote on comment
+	CommentID       int        `json:"commentID" db:"comment_id"`              // Primary key
+	PostID          int        `json:"postID" db:"post_id"`                    // Foreign key to Post
+	ParentCommentID *int       `json:"parentCommentID" db:"parent_comment_id"` // Foreign key to parent Comment (nullable)
+	PostTitle       string     `json:"postTitle" db:"post_title"`
+	Content         string     `json:"content" db:"content"`
+	CreatedBy       int        `json:"createdBy" db:"created_by"`
+	Username        string     `json:"username" db:"username"`
+	CreatedAt       time.Time  `json:"createdAt" db:"created_at"`
+	UpdatedAt       time.Time  `json:"updatedAt" db:"updated_at"`
+	VoteCount       int        `json:"voteCount" db:"vote_count"`
+	UserVote        *int       `json:"userVote,omitempty" db:"user_vote"` // Current user's vote on comment
+	Depth           int        `json:"depth,omitempty"`                   // Depth level for nested comments
+	Replies         []*Comment `json:"replies"`                           // Nested replies
 }
 
 // Vote struct

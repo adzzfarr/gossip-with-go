@@ -492,6 +492,42 @@ func (repo *Repository) GetPostByID(postID int, userID *int) (*Post, error) {
 	return &post, nil
 }
 
+// buildCommentTree constructs a tree of comments from a flat list
+func buildCommentTree(comments []*Comment) []*Comment {
+	// Map for quick lookup by commentID
+	commentMap := make(map[int]*Comment)
+	topLevelComments := []*Comment{}
+
+	// Initialise all comments in map
+	for _, comment := range comments {
+		comment.Replies = []*Comment{}
+		commentMap[comment.CommentID] = comment
+	}
+
+	// Assign children to parents
+	for _, comment := range comments {
+		if comment.ParentCommentID == nil {
+			// Top-level comment
+			comment.Depth = 0
+			topLevelComments = append(topLevelComments, comment)
+		} else {
+			// Reply to another comments
+			parentComment, exists := commentMap[*comment.ParentCommentID]
+
+			if exists {
+				comment.Depth = parentComment.Depth + 1
+				parentComment.Replies = append(parentComment.Replies, comment)
+			} else {
+				// Orphaned comment, treat as top-level
+				comment.Depth = 0
+				topLevelComments = append(topLevelComments, comment)
+			}
+		}
+	}
+
+	return topLevelComments
+}
+
 // GetCommentsByPostID fetches all comments for a given post ID
 func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy, searchQuery string, page, limit int) (*CommentsResponse, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -555,6 +591,7 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy, sea
 		SELECT 
 			c.comment_id, 
 			c.post_id, 
+			c.parent_comment_id,
 			c.content, 
 			c.created_by, 
 			u.username, 
@@ -589,6 +626,7 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy, sea
 	}
 	defer rows.Close()
 
+	// Initialise flat list
 	comments := []*Comment{}
 	for rows.Next() {
 		var comment Comment
@@ -596,6 +634,7 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy, sea
 		err := rows.Scan(
 			&comment.CommentID,
 			&comment.PostID,
+			&comment.ParentCommentID,
 			&comment.Content,
 			&comment.CreatedBy,
 			&comment.Username,
@@ -615,6 +654,9 @@ func (repo *Repository) GetCommentsByPostID(postID int, userID *int, sortBy, sea
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error encountered during row iteration: %w", err)
 	}
+
+	// Build tree structure from flat list
+	comments = buildCommentTree(comments)
 
 	totalPages := (totalItems + limit - 1) / limit
 	if totalPages == 0 {
@@ -646,6 +688,7 @@ func (repo *Repository) GetCommentByID(commentID int, userID *int) (*Comment, er
 		SELECT
 			c.comment_id,
 			c.post_id,
+			c.parent_comment_id,
 			p.title as post_title,
 			c.content,
 			c.created_by,
@@ -668,6 +711,7 @@ func (repo *Repository) GetCommentByID(commentID int, userID *int) (*Comment, er
 	err := repo.DB.QueryRow(ctx, query, commentID, userID).Scan(
 		&comment.CommentID,
 		&comment.PostID,
+		&comment.ParentCommentID,
 		&comment.PostTitle,
 		&comment.Content,
 		&comment.CreatedBy,
@@ -684,6 +728,9 @@ func (repo *Repository) GetCommentByID(commentID int, userID *int) (*Comment, er
 		}
 		return nil, fmt.Errorf("query to find comment failed: %w", err)
 	}
+
+	// Initialise empty replies
+	comment.Replies = []*Comment{}
 
 	return &comment, nil
 }
@@ -739,25 +786,27 @@ func (repo *Repository) CreatePost(topicID int, title, content string, userID in
 }
 
 // CreateComment inserts a new comment into the database
-func (repo *Repository) CreateComment(postID int, content string, userID int) (*Comment, error) {
+func (repo *Repository) CreateComment(postID int, content string, userID int, parentCommentID *int) (*Comment, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	query := `
-		INSERT INTO comments (post_id, content, created_by)
-		VALUES ($1, $2, $3)
-		RETURNING comment_id, post_id, content, created_by, created_at, updated_at`
+		INSERT INTO comments (post_id, parent_comment_id, content, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		RETURNING comment_id, post_id, parent_comment_id, content, created_by, created_at, updated_at`
 
 	var comment Comment
 	err := repo.DB.QueryRow(
 		ctx,
 		query,
 		postID,
+		parentCommentID,
 		content,
 		userID,
 	).Scan(
 		&comment.CommentID,
 		&comment.PostID,
+		&comment.ParentCommentID,
 		&comment.Content,
 		&comment.CreatedBy,
 		&comment.CreatedAt,
@@ -782,6 +831,9 @@ func (repo *Repository) CreateComment(postID int, content string, userID int) (*
 	}
 
 	comment.Username = username
+	comment.VoteCount = 0
+	comment.UserVote = nil
+	comment.Replies = []*Comment{}
 
 	return &comment, nil
 }

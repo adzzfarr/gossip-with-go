@@ -527,7 +527,7 @@ func TestCreateComment(t *testing.T) {
 
 	// 1. Successful comment creation
 	t.Run("TestSuccessfulCommentCreation", func(t *testing.T) {
-		comment, err := repo.CreateComment(postID, "Test Comment", userID)
+		comment, err := repo.CreateComment(postID, "Test Comment", userID, nil)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
