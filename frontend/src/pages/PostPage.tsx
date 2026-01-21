@@ -1,16 +1,18 @@
-import type { Comment as CommentType } from "../types/index";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../hooks/redux";
 import { deletePost, fetchPostByID } from "../features/postsSlice";
-import { clearCommentsError, createComment, deleteComment, fetchCommentsByPostID, setCommentsCurrentPage, setCommentsSearchQuery, setCommentsSortBy, updateComment } from "../features/commentsSlice";
+import { createComment, createCommentReply, deleteComment, fetchCommentsByPostID, setCommentsCurrentPage, setCommentsSearchQuery, setCommentsSortBy, updateComment } from "../features/commentsSlice";
 import { useEffect, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Paper, TextField, Typography } from "@mui/material";
 import { ArrowBack, Clear, Delete, Edit, Search } from "@mui/icons-material";
 import ForumBreadcrumbs from "../components/Breadcrumbs";
 import Username from "../components/Username";
 import VoteButtons from "../components/VoteButtons";
 import SortDropdown from "../components/SortDropdown";
 import Pagination from "../components/Pagination";
+import CommentsList from "../components/CommentsList";
+import CommentForm from "../components/CommentForm";
+import type { Comment } from "../types";
 
 export default function PostPage() {
     const { postID } = useParams<{ postID: string}>();
@@ -63,6 +65,10 @@ export default function PostPage() {
         }
     }, [postID, sortBy, searchQuery, currentPage, dispatch]);
 
+    const handleCommentSortChange = (newSort: string) => {
+        dispatch(setCommentsSortBy(newSort));
+    }
+
     const handlePageChange = (newPage: number) => {
         dispatch(setCommentsCurrentPage(newPage));
         
@@ -74,68 +80,47 @@ export default function PostPage() {
     }
 
     // Check if user is author 
-    const isAuthor = currentPost && currentPost.createdBy === userID;
+    const isAuthor = currentPost && currentPost.createdBy === userID;  
 
-    // For adding new comment
-    const [commentContent, setCommentContent] = useState('');    
-
-    const handleCommentSortChange = (newSort: string) => {
-        dispatch(setCommentsSortBy(newSort));
-    }
-
-    const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setCommentContent(e.target.value);
-        if (commentSubmitError) {
-            dispatch(clearCommentsError());
-        }
-    }
-    
-    const handleSubmitComment = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!postID || !commentContent.trim()) return;
+    // For adding new comments
+    const handleCreateComment = async (content: string) => {
+        if (!postID || !content.trim()) return;
 
         const result = await dispatch(
             createComment({
                 postID: parseInt(postID),
-                content: commentContent.trim(),
+                content: content.trim(),
             })
         );
 
         if (createComment.fulfilled.match(result)) {
-            // Clear comment input on successful submission
-            setCommentContent('');
+            // Refresh comments to show new comment
+            dispatch(fetchCommentsByPostID({
+                postID: parseInt(postID),
+                sortBy,
+                search: searchQuery,
+                page: currentPage,
+            }));
         }
     }
 
     // For editing existing comments
-    const [commentToEditID, setCommentToEditID] = useState<number | null>(null);
-    const [editedCommentContent, setEditedCommentContent] = useState('');
-
-    const handleEditCommentClicked = (comment: CommentType) => {
-        setCommentToEditID(comment.commentID);
-        setEditedCommentContent(comment.content);
-    }
-
-    const handleCancelEdit = () => {
-        setCommentToEditID(null);
-        setEditedCommentContent('');
-    }
-
-    const handleSaveEditedComment = async (commentID: number) => {
-        if (!editedCommentContent.trim()) return;
-
+    const handleEdit = async (commentID: number, content: string) => {
         const result = await dispatch(
             updateComment({
                 commentID,
-                content: editedCommentContent.trim(),
+                content,
             })
         );
 
         if (updateComment.fulfilled.match(result)) {
-            // Clear edit state on successful update
-            setCommentToEditID(null);
-            setEditedCommentContent('');
+            // Refresh to show edit
+            dispatch(fetchCommentsByPostID({
+                postID: parseInt(postID || '0'),
+                sortBy,
+                search: searchQuery,
+                page: currentPage,
+            }));
         }
     }
 
@@ -143,17 +128,73 @@ export default function PostPage() {
     const [commentToDelete, setCommentToDelete] = useState<number | null>(null);
     const [deleteCommentDialogOpen, setDeleteCommentDialogOpen] = useState(false);
 
+    const countReplies = (comment: Comment): number => {
+        if (!comment.replies || comment.replies.length === 0) return 0;
+
+        return comment.replies.length + comment.replies.reduce(
+            (sum, reply) => sum + countReplies(reply), 0,
+        )
+    }
+
+    const findCommentByID = (commentsList: Comment[], commentID: number): Comment | null => {
+        for (const comment of commentsList) {
+            if (comment.commentID === commentID) return comment;
+
+            if (comment.replies) {
+                const foundInReplies = findCommentByID(comment.replies, commentID);
+                if (foundInReplies) return foundInReplies;
+            }
+        }
+        return null;
+    }
+
     const handleDeleteCommentClicked = (commentID: number) => {
         setCommentToDelete(commentID);
         setDeleteCommentDialogOpen(true);
     }
 
-    const handleDeleteComment = async () => {
-        if (!commentToDelete) return;
+    const handleConfirmDeleteComment = async () => {
+        if (!commentToDelete || !postID) return;
 
-        await dispatch(deleteComment(commentToDelete));
+        const result = await dispatch(
+            deleteComment(commentToDelete)
+        );
+
+        if (deleteComment.fulfilled.match(result)) {
+            // Refresh comments to show deletion
+            dispatch(fetchCommentsByPostID({
+                postID: parseInt(postID),
+                sortBy,
+                search: searchQuery,
+                page: currentPage,
+            }));
+        }
+
         setDeleteCommentDialogOpen(false);
         setCommentToDelete(null);
+    }
+
+    // For replying to comments
+    const handleReply = async (parentCommentID: number, content: string) => {
+        if (!postID || !content.trim()) return;
+
+        const result = await dispatch(
+            createCommentReply({
+                postID: parseInt(postID),
+                parentCommentID,
+                content: content.trim(),
+            })
+        );
+
+        if (createCommentReply.fulfilled.match(result)) {
+            // Refresh comments to show new comment
+            dispatch(fetchCommentsByPostID({
+                postID: parseInt(postID),
+                sortBy,
+                search: searchQuery,
+                page: currentPage,
+            }));
+        };
     }
 
     // For deleting post
@@ -352,18 +393,9 @@ export default function PostPage() {
             {/* Comments Section */}
             <Box>
                 {/* Comments Header */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        mb: 3,
-                    }}
-                >
-                    <Typography variant="h5" component="h2">
-                        Comments ({comments.length})
-                    </Typography>
-                </Box>
+                <Typography variant="h5" component="h2">
+                    Comments ({pagination?.totalItems || comments.length})
+                </Typography>
 
                 {/* Search and Sort Controls */}
                 <Box
@@ -432,185 +464,26 @@ export default function PostPage() {
                     </Alert>
                 )}
 
-                {comments.length === 0
-                    ? (<Alert severity="info">No comments yet. Be the first to comment!</Alert>)
-                    : (
-                        <Box
-                            sx={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 2,
-                                mb: 2,
-                            }}
-                        >
-                            {comments.map((comment) => {
-                                const isCommentAuthor = comment.createdBy === userID;
-                                const isEditing = commentToEditID === comment.commentID;
-
-                                return (
-                                    <Card key={comment.commentID} variant="outlined">
-                                        <CardContent>
-                                            <Box
-                                                sx={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'flex-start',
-                                                    mb: 1,
-                                                }}
-                                            >
-                                                <Box
-                                                    sx={{
-                                                        display: 'flex',
-                                                        gap: 2,
-                                                        alignItems: 'center',
-                                                    }}
-                                                >
-                                                    <Username
-                                                        username={comment.username || 'Unknown'}
-                                                        userID={comment.createdBy}
-                                                        variant="body2"
-                                                        fontWeight="bold"
-                                                    />
-
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        {new Date(comment.createdAt).toLocaleString()}
-                                                    </Typography>
-                                                </Box>
-
-                                                {/* Edit and Delete Buttons for comment author */}
-                                                {isCommentAuthor && !isEditing && (
-                                                    <Box
-                                                        sx={{
-                                                            display: 'flex',
-                                                            gap: 1,
-                                                        }}
-                                                    >
-                                                        <Button
-                                                            size="small"
-                                                            startIcon={<Edit />}
-                                                            onClick={() => handleEditCommentClicked(comment)}
-                                                        >
-                                                            Edit
-                                                        </Button>
-                                                        <Button
-                                                            size="small"
-                                                            color="error"
-                                                            startIcon={<Delete />}
-                                                            onClick={() => handleDeleteCommentClicked(comment.commentID)}
-                                                            disabled={commentSubmitting}
-                                                        >
-                                                            Delete
-                                                        </Button>
-                                                    </Box>
-                                                )}
-                                            </Box>
-
-                                            {isEditing 
-                                                ? (
-                                                    <Box>
-                                                        <TextField
-                                                            fullWidth
-                                                            multiline
-                                                            minRows={2}
-                                                            value={editedCommentContent}
-                                                            onChange={(e) => setEditedCommentContent(e.target.value)}
-                                                            disabled={commentSubmitting}
-                                                            sx={{ mb: 1 }}
-                                                        />
-                                                        <Box
-                                                            sx={{
-                                                                display: 'flex',
-                                                                gap: 1,
-                                                            }}
-                                                        >
-                                                            <Button
-                                                                size="small"
-                                                                variant="contained"
-                                                                onClick={() => handleSaveEditedComment(comment.commentID)}
-                                                                disabled={commentSubmitting || !editedCommentContent.trim()}
-                                                            >
-                                                                {commentSubmitting ? <CircularProgress size={24} /> : 'Save'}
-                                                            </Button>
-                                                            <Button
-                                                                size="small"
-                                                                variant="outlined"
-                                                                onClick={handleCancelEdit}
-                                                                disabled={commentSubmitting}
-                                                            >
-                                                                Cancel
-                                                            </Button>
-                                                        </Box>
-                                                    </Box>
-                                                )
-                                                : (
-                                                    <>
-                                                        <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
-                                                            {comment.content}
-                                                        </Typography>
-
-                                                        <Divider sx={{ my: 2 }}/>
-
-                                                        <Box
-                                                            sx={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: 1,
-                                                            }}
-                                                        >
-                                                            <VoteButtons
-                                                                commentID={comment.commentID} 
-                                                                initialVoteCount={comment.voteCount || 0}
-                                                                initialUserVote={comment.userVote}
-                                                                orientation="horizontal"
-                                                                size="small"    
-                                                            />
-                                                        </Box>
-                                                    </>
-                                                )
-                                            }
-                                        </CardContent>
-                                    </Card>
-                                );
-                            })}
-                        </Box>
-                    )
-                }
+                {/* Comments List */}
+                <CommentsList 
+                    comments={comments}
+                    userID={userID ?? undefined}
+                    isSubmitting={commentSubmitting}
+                    onEdit={handleEdit}
+                    onDelete={handleDeleteCommentClicked}
+                    onReply={handleReply}
+                />
 
                 {/* Add Comment Form */}
                 {isAuthenticated && (
-                    <Paper
-                        elevation={1}
-                        sx={{ 
-                            p: 2, 
-                            mb: 3 
-                        }}
-                    >
-                        <form onSubmit={handleSubmitComment}>
-                            <TextField
-                                fullWidth
-                                multiline
-                                minRows={3}
-                                placeholder="Write a comment..."
-                                value={commentContent}
-                                onChange={handleCommentChange}
-                                disabled={commentSubmitting}
-                                sx={{ mb: 2 }}
-                            />
-                            
-                            {commentSubmitError && (
-                                <Alert severity="error" sx={{ mb: 2 }}>{commentSubmitError}</Alert>
-                            )}
-
-                            <Button
-                                type="submit"
-                                variant="contained"
-                                disabled={commentSubmitting || !commentContent.trim()}
-                            >
-                                {commentSubmitting ? <CircularProgress size={24} /> : 'Post Comment'}
-                            </Button>
-                        </form>
-                    </Paper>)
-                }
+                    <Box>
+                        <CommentForm 
+                            onSubmit={handleCreateComment}
+                            isSubmitting={commentSubmitting}
+                            error={commentSubmitError}
+                        />
+                    </Box>
+                )}
             </Box>
 
             {/* Pagination Controls */}
@@ -631,7 +504,19 @@ export default function PostPage() {
                 <DialogTitle>Delete Comment?</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Are you sure you want to delete this comment? This action cannot be undone.
+                        {commentToDelete && (
+                            () => {
+                                const comment = findCommentByID(comments, commentToDelete);
+                                const replyCount = comment ? countReplies(comment) : 0;
+                                return (
+                                    <>
+                                        replyCount == 0 
+                                            ? <>Are you sure you want to delete this comment? This action cannot be undone.</>
+                                            : <>Are you sure you want to delete this comment? This will also delete {replyCount} repl{replyCount === 1 ? 'y' : 'ies'}. This action cannot be undone.</>
+                                    </>
+                                );
+                            }
+                        )()}
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
@@ -639,7 +524,7 @@ export default function PostPage() {
                         Cancel
                     </Button>
                     <Button
-                        onClick={handleDeleteComment}
+                        onClick={handleConfirmDeleteComment}
                         color="error"
                         disabled={commentSubmitting}
                     >

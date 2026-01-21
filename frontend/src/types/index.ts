@@ -36,6 +36,7 @@ export interface Post {
 export interface Comment {
     commentID: number;
     postID: number;
+    parentCommentID?: number;
     postTitle?: string;
     content: string;
     createdBy: number;
@@ -44,6 +45,8 @@ export interface Comment {
     updatedAt: string;
     voteCount: number;
     userVote?: 1 | -1 | null;
+    depth?: number;
+    replies?: Comment[];
 }
 
 // Auth types for login/register 

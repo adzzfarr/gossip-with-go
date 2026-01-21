@@ -142,7 +142,7 @@ export const deleteComment = createAsyncThunk(
             return rejectWithValue(error.response?.data?.error || 'Failed to delete comment');
         }
     }
-)
+);
 
 // Vote on Comment
 export const voteOnComment = createAsyncThunk(
@@ -175,7 +175,41 @@ export const voteOnComment = createAsyncThunk(
             return rejectWithValue(error.response?.data?.error || 'Failed to vote on comment');
         }
     }
-)
+);
+
+export const createCommentReply = createAsyncThunk(
+    'comments/createCommentReply',
+    async (
+        { postID, parentCommentID, content }: {
+            postID: number;
+            parentCommentID: number;
+            content: string;
+        },
+        { rejectWithValue }
+    ) => {
+        try {
+            const token = localStorage.getItem('token');
+
+            const response = await apiClient.post<Comment>(
+                `/posts/${postID}/comments`,
+                { content, parentCommentID },
+                token ? {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }   
+                } : undefined
+            );
+
+            if (!response.data) {
+                return rejectWithValue('No comment data returned from server');
+            }
+
+            return response.data;
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.error || 'Failed to create comment reply'); 
+        }
+    }
+);
 
 const commentsSlice = createSlice({
     name: 'comments',
@@ -328,6 +362,31 @@ const commentsSlice = createSlice({
             voteOnComment.rejected,
             (state, action) => {
                 state.error = action.payload as string;
+            }
+        );
+
+        // Create comment reply
+        builder.addCase(
+            createCommentReply.pending,
+            (state) => {
+                state.submitting = true;
+                state.submitError = null;
+            }
+        );
+
+        builder.addCase(
+            createCommentReply.fulfilled,
+            (state, action) => {
+                state.submitting = false;
+                state.comments.push(action.payload);
+            }
+        );
+
+        builder.addCase(
+            createCommentReply.rejected,
+            (state, action) => {
+                state.submitting = false;
+                state.submitError = action.payload as string;
             }
         );
     },
