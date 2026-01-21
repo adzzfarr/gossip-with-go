@@ -118,6 +118,7 @@ export default function CommentCard({
                             </Typography>
                         </Box>
 
+                        {/* Edit/Delete Buttons */}
                         {isAuthor && !isEditing && (
                             <Box
                                 sx={{
@@ -145,9 +146,6 @@ export default function CommentCard({
                             </Box>
                         )}
                     </Box>
-
-                    {/* Edit and Delete Buttons */}
-
 
                     {/* Comment Content or Edit Form */}
                     {
