@@ -81,7 +81,7 @@ func main() {
 	repo := data.NewRepository(dbPool)
 
 	// Seed Handler
-	seedHandler := api.NewSeedHandler(dbPool)
+	// seedHandler := api.NewSeedHandler(dbPool)
 
 	// Topics
 	topicService := service.NewTopicService(repo)
@@ -142,7 +142,7 @@ func main() {
 	})
 
 	// Seed endpoint
-	router.POST("/seed", seedHandler.SeedDatabase)
+	// router.POST("/seed", seedHandler.SeedDatabase)
 
 	// Register API Routes
 	v1 := router.Group("/api/v1")
