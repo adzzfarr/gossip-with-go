@@ -80,6 +80,9 @@ func main() {
 	// Initialise Layers
 	repo := data.NewRepository(dbPool)
 
+	// Seed Handler
+	seedHandler := api.NewSeedHandler(dbPool)
+
 	// Topics
 	topicService := service.NewTopicService(repo)
 	topicHandler := api.NewTopicHandler(topicService)
@@ -137,6 +140,9 @@ func main() {
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "UP"})
 	})
+
+	// Seed endpoint
+	router.POST("/seed", seedHandler.SeedDatabase)
 
 	// Register API Routes
 	v1 := router.Group("/api/v1")
