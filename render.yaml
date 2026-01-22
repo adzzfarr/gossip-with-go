@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: gossip-backend
+    env: go
+    region: oregon
+    plan: free
+    rootDir: backend  # ← ADD THIS LINE
+    buildCommand: go build -o server cmd/server/main.go
+    startCommand: ./server
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: gossip-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: gossip-db
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: gossip-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: gossip-db
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: gossip-db
+          property: database
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 8080
+
+databases:
+  - name: gossip-db
+    databaseName: forum_db
+    user: forum_user
+    plan: free
