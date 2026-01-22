@@ -15,6 +15,15 @@ import (
 func Run(pool *pgxpool.Pool) error {
 	ctx := context.Background()
 
+	// Clear existing data first (optional but recommended)
+	log.Println("🧹 Clearing existing data...")
+	if err := clearData(ctx, pool); err != nil {
+		log.Printf("   ⚠️  Warning: Failed to clear data: %v", err)
+		log.Println("   Continuing anyway...")
+	} else {
+		log.Println("   ✓ Data cleared")
+	}
+
 	// Create test users
 	log.Println("🌱 Creating test users...")
 	userIDs, err := createUsers(ctx, pool, 10)
@@ -57,7 +66,7 @@ func Run(pool *pgxpool.Pool) error {
 	}
 	log.Printf("   ✓ Created %d total posts\n", postCount)
 
-	// Add some votes
+	// Add votes
 	log.Println("🌱 Adding votes...")
 	if err := addVotes(ctx, pool, userIDs); err != nil {
 		return fmt.Errorf("failed to add votes: %w", err)
@@ -65,6 +74,29 @@ func Run(pool *pgxpool.Pool) error {
 	log.Println("   ✓ Votes added")
 
 	return nil
+}
+
+// clearData removes all existing data
+func clearData(ctx context.Context, pool *pgxpool.Pool) error {
+	tables := []string{"votes", "comments", "posts", "topics", "users"}
+
+	for _, table := range tables {
+		_, err := pool.Exec(ctx, fmt.Sprintf("DELETE FROM %s", table))
+		if err != nil {
+			return fmt.Errorf("failed to clear %s: %w", table, err)
+		}
+	}
+
+	// Reset sequences
+	_, err := pool.Exec(ctx, `
+        ALTER SEQUENCE users_user_id_seq RESTART WITH 1;
+        ALTER SEQUENCE topics_topic_id_seq RESTART WITH 1;
+        ALTER SEQUENCE posts_post_id_seq RESTART WITH 1;
+        ALTER SEQUENCE comments_comment_id_seq RESTART WITH 1;
+        ALTER SEQUENCE votes_vote_id_seq RESTART WITH 1;
+    `)
+
+	return err
 }
 
 func createUsers(ctx context.Context, pool *pgxpool.Pool, count int) ([]int, error) {
@@ -76,7 +108,6 @@ func createUsers(ctx context.Context, pool *pgxpool.Pool, count int) ([]int, err
 		"isaac_newton", "julia_child",
 	}
 
-	// Hash a simple password for testing (Password123)
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("Password123"), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
@@ -87,7 +118,8 @@ func createUsers(ctx context.Context, pool *pgxpool.Pool, count int) ([]int, err
 		err := pool.QueryRow(ctx, `
             INSERT INTO users (username, password_hash, created_at, updated_at)
             VALUES ($1, $2, NOW(), NOW())
-            ON CONFLICT (username) DO NOTHING
+            ON CONFLICT (username) DO UPDATE 
+            SET updated_at = NOW()
             RETURNING user_id
         `, usernames[i], string(hashedPassword)).Scan(&userID)
 
@@ -95,9 +127,7 @@ func createUsers(ctx context.Context, pool *pgxpool.Pool, count int) ([]int, err
 			return nil, fmt.Errorf("failed to create user %s: %w", usernames[i], err)
 		}
 
-		if userID != 0 {
-			userIDs = append(userIDs, userID)
-		}
+		userIDs = append(userIDs, userID)
 	}
 
 	return userIDs, nil
