@@ -244,9 +244,9 @@ func addVotes(ctx context.Context, pool *pgxpool.Pool, userIDs []int) error {
 	for _, postID := range postIDs {
 		for _, userID := range userIDs {
 			if rand.Float32() < 0.3 {
-				voteType := "upvote"
+				voteType := 1 // Changed from "upvote" to 1
 				if rand.Float32() < 0.2 {
-					voteType = "downvote"
+					voteType = -1 // Changed from "downvote" to -1
 				}
 
 				_, err := pool.Exec(ctx, `
@@ -282,9 +282,9 @@ func addVotes(ctx context.Context, pool *pgxpool.Pool, userIDs []int) error {
 	for _, commentID := range commentIDs {
 		for _, userID := range userIDs {
 			if rand.Float32() < 0.2 {
-				voteType := "upvote"
+				voteType := 1 // Changed from "upvote" to 1
 				if rand.Float32() < 0.15 {
-					voteType = "downvote"
+					voteType = -1 // Changed from "downvote" to -1
 				}
 
 				_, err := pool.Exec(ctx, `
