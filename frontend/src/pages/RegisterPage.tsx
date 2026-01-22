@@ -97,7 +97,7 @@ export default function RegisterPage() {
         }
 
         // Send register request to backend via Redux thunk if validation passes
-        dispatch(registerUser({ username, password }) );
+        dispatch(registerUser({ username, password }));
     };
 
     const displayError = error || validationError;

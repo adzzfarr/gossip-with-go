@@ -58,7 +58,7 @@ func setupRouter(t *testing.T) (*gin.Engine, *data.Repository) {
 	{
 
 		v1.GET("/topics", topicHandler.GetAllTopics)
-		v1.POST("/users", userHandler.RegisterUser)
+		v1.POST("/register", userHandler.RegisterUser)
 		v1.GET("/topics/:topicID/posts", postHandler.GetPostsByTopicID)
 		v1.GET("/posts/:postID/comments", commentHandler.GetCommentsByPostID)
 		v1.POST("/login", loginHandler.LoginUser)

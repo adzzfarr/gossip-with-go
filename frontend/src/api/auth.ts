@@ -10,7 +10,7 @@ import type {
 export const authAPI = {
     // Register new user
     registerUser: async (credentials: RegisterCredentials): Promise<RegisterResponse> => {
-        const response = await apiClient.post<RegisterResponse>('/users', credentials);
+        const response = await apiClient.post<RegisterResponse>('/register', credentials);
         return response.data;
     },
 
