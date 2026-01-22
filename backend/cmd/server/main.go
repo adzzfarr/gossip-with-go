@@ -59,7 +59,10 @@ func main() {
 
 	// CORS Middleware
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowOrigins: []string{
+			"http://localhost:5173",
+			"https://*.vercel.app",
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -74,6 +77,15 @@ func main() {
 	// Register API Routes
 	v1 := router.Group("/api/v1")
 	{
+		// Health check endpoint
+		v1.GET("/health", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"status":    "healthy",
+				"timestamp": time.Now().Unix(),
+				"version":   "1.0.0",
+			})
+		})
+
 		// Public Routes - No Auth Required
 		v1.POST("/register", userHandler.RegisterUser)
 		v1.POST("/login", loginHandler.LoginUser)
