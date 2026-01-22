@@ -4,6 +4,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -59,9 +60,20 @@ func main() {
 
 	// CORS Middleware
 	router.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:5173",
-			"https://*.vercel.app",
+		AllowOriginFunc: func(origin string) bool {
+			if strings.HasPrefix(origin, "http://localhost:") {
+				return true
+			}
+
+			if strings.HasSuffix(origin, ".vercel.app") {
+				return true
+			}
+
+			if origin == "https://gossip-with-go-seven.vercel.app/" {
+				return true
+			}
+
+			return false
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
