@@ -4,18 +4,70 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 
 	"github.com/adzzfarr/gossip-with-go/backend/internal/api"
 	"github.com/adzzfarr/gossip-with-go/backend/internal/data"
 	"github.com/adzzfarr/gossip-with-go/backend/internal/service"
 )
 
+// Run database migrations
+func runMigrations() error {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Println("DATABASE_URL not set, skipping migration")
+		return nil
+	}
+
+	if !strings.Contains(databaseURL, "sslmode=") {
+		if strings.Contains(databaseURL, "?") {
+			databaseURL += "&sslmode=require"
+		} else {
+			databaseURL += "?sslmode=require"
+		}
+	}
+
+	// Migration instance
+	m, err := migrate.New(
+		"file://./migrations",
+		databaseURL,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	defer m.Close()
+
+	// Run migrations up
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return err
+	}
+
+	if err == migrate.ErrNoChange {
+		log.Println("No new migrations to apply.")
+	} else {
+		log.Println("Database migrations applied successfully.")
+	}
+
+	return nil
+}
+
 func main() {
+	// Run migrations
+	if err := runMigrations(); err != nil {
+		log.Printf("Failed to run migrations: %v", err)
+		log.Println("Continuing anyway; check if database is already migrated")
+	}
+
 	// Initialise database
 	dbPool, err := data.OpenDB()
 	if err != nil {
